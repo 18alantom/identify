@@ -63,7 +63,7 @@ def save_face_crops(buffer, name):
 # Runs camera loop and detects faces (bounding box not shown)
 # Face is stored when shift-N is pressed.
 def grab_face():
-    ESC = 27          # For esc 
+    ESC = 27          # For esc
     N = 78            # For shift-N
     model = MTCNN()
     img_count = 0
@@ -92,7 +92,9 @@ def grab_face():
                 img_count = 0
                 buffer.clear()
                 print(f"crops of {name} saved")
-                print("add more crops or press esc to exit")
+                to_exit = input("exit ([y]/n): ")
+                if to_exit != 'n':
+                    break
 
         elif cv2.waitKey(1) == ESC:
             print("exiting")

@@ -1,6 +1,6 @@
 """
 Will create embeddings of dimension 512 from 
-images in the face_crops.
+tensors (3,3,160,160) in the face_crops.
 
 Embeddings will be saved for later distance based
 comparison and identification.
@@ -9,57 +9,64 @@ comparison and identification.
 import time
 import os
 import torch
-import cv2
-import numpy as np
 from models.inception_resnet_v1 import InceptionResnetV1
 
-# state_dict_path = '../inception_resnet_v1_vggface2.pt'
-# sorted_images_path = './sorted'
-# ext = '.jpg'
-# size = 160
-# folders = []
-# times = []
-# embeddings_dict = {}
-# images_dict = {}
+CROP_FILE_TYPE = ".pt"
+FACE_CROP_PATH = "data/face_crops"
+EMBEDDINGS_PATH = "data/embeddings"
+EMBED_NAME = "embed_dict.pt"
 
 
-# model = InceptionResnetV1()
+def get_face_crops():
+    crops = None
+    names = []
 
-# # Loading the model with state dict.
-# if os.path.isfile(state_dict_path):
-#     state_dict = torch.load(state_dict_path)
-#     model.load_state_dict(state_dict)
-#     model.eval()
-#     print("state dict loaded and model evaluated")
+    if not os.path.isdir(FACE_CROP_PATH):
+        return None
 
-# for folder in os.listdir(sorted_images_path):
-#     folder_path = os.path.join(sorted_images_path,folder)
+    for crop_file in os.listdir(FACE_CROP_PATH):
+        name_ind, ext = os.path.splitext(crop_file)
+        if ext == CROP_FILE_TYPE:
+            name, _ = name_ind.split('_')
+            crop = torch.load(os.path.join(FACE_CROP_PATH, crop_file))
 
-#     # Check if the item is a folder
-#     if os.path.isdir(folder_path):
-#         folders.append(folder)
-#         images_dict[folder] = []
+            # Each individual may have multiple crops
+            for i in range(crop.shape[0]):
+                names.append(name)
 
-#         for img_name in os.listdir(os.path.join(sorted_images_path,folder)):
-#             if os.path.splitext(img_name)[1] == ext:
-#                 img = cv2.imread(os.path.join(sorted_images_path,folder,img_name))
-#                 images_dict[folder].append(img.T.reshape(-1,160,160))
-
-# for folder in folders:
-#     img_batch = torch.tensor(images_dict[folder])
-#     x = time.time()
-#     embeddings_dict[folder] = model.forward(img_batch)
-#     y = time.time()
-#     times.append(y - x)
-#     print(f'{folder}: {embeddings_dict[folder].shape}')
-
-# torch.save(embeddings_dict, 'embeddings.pt')
-
-# print(folders)
-# print(f'mean inference time: {np.array(times).mean() * 1000:0.2f} ms')
+            # Crops should be of shape: (count=n, channels=3, dim_x=160, dim_y=160)
+            if crops is None:
+                crops = crop
+            else:
+                crops = torch.cat([crops, crop])
+    return crops, names
 
 
+def save_embeddings(embeddings, names):
+    embed_dict = {"embeddings": embeddings, "names": names}
+    if not os.path.isdir(EMBEDDINGS_PATH):
+        os.mkdir(EMBEDDINGS_PATH)
+
+    path = os.path.join(EMBEDDINGS_PATH, EMBED_NAME)
+    torch.save(embed_dict, path)
 
 
+def gen_embeddings():
+    device = None
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
 
+    crops_names = get_face_crops()
+    if crops_names is None:
+        return
 
+    crops, names = crops_names
+    model = InceptionResnetV1(device=device)
+
+    # Run inference
+    t1 = time.time()
+    embeddings = model.forward(crops)
+    t2 = time.time()
+
+    save_embeddings(embeddings, names)
+    print(f"Inference: {(t2-t1)*1000:0.2f} ms, batch size {crops.shape[0]}")
