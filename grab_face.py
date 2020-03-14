@@ -82,7 +82,6 @@ def grab_face():
             if face_crop is None:
                 print("not detected try again")
             else:
-                print(face_crop)
                 buffer.append(face_crop.reshape(1, 3, 160, 160))
                 img_count += 1
 

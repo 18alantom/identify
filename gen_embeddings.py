@@ -70,3 +70,5 @@ def gen_embeddings():
 
     save_embeddings(embeddings, names)
     print(f"Inference: {(t2-t1)*1000:0.2f} ms, batch size {crops.shape[0]}")
+
+gen_embeddings()

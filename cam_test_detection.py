@@ -42,7 +42,7 @@ def cnn_detector(rgb_img, model, landmarks, thresh, border_color, line_width):
         p1 = (box[0], box[1])
         p2 = (box[2], box[3])
 
-        cv2.putText(img_boxed, str(p), (p1[0],int(p1[1]+20)), cv2.FONT_HERSHEY_SIMPLEX,
+        cv2.putText(img_boxed, str(p), (p1[0], int(p1[1]+20)), cv2.FONT_HERSHEY_SIMPLEX,
                     0.6, border_color, line_width)
         cv2.rectangle(
             img_boxed, p1, p2, color=border_color, thickness=line_width)
@@ -61,7 +61,8 @@ def cnn_detector(rgb_img, model, landmarks, thresh, border_color, line_width):
 
 def run_cam_test(method, scale, landmarks, device, thresh, line_width, border_color):
     if method == 'cnn':
-        model = MTCNN()
+        thresholds = [0.8, 0.9, 0.9]
+        model = MTCNN(thresholds=thresholds)
 
     cam = cv2.VideoCapture(0)
     times = []
@@ -113,7 +114,7 @@ def set_param_run():
     # Parameters
     scale = 0.5
     cnn_landmarks = True
-    cnn_thresh = 0.9
+    cnn_thresh = 0.95
     line_width = 1
     border_color = (0, 200, 0)
 
