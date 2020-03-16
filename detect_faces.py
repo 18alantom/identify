@@ -1,5 +1,13 @@
 """
-Detect and Store Faces
+Detect and Store Faces.
+
+Flags:
+    -i: input folder of images, defaults to preset value if invalid or not present
+    -o: output folder for crops, defaults to preset value if invalid or not present
+    -s: ignore scanned images, defaults to False if not present
+
+Example:
+    python detect_faces.py -s -i data/images -o crops
 
 Read images (using PIL) from the `DATA_PATH` folder,
 detect faces in them using MTCNN, crop and transform these faces.
@@ -16,7 +24,6 @@ Store in folder structure:
                   └── 000.pt
 
 // TODO: Make a better interface for this.
-// TODO: Make into a script with varibale input and output folders
 """
 
 import os
@@ -29,31 +36,46 @@ from time import time
 from PIL import Image
 from models.mtcnn import MTCNN
 
+# File ext and names
 IMG_FORMAT = ".jpg"
 CROP_FORMAT = ".pt"
+SCANNED_IMAGE_LIST = "scanned.npy"
+
+# Flags
+IGNORE_SCANNED = "-s"
+INPUT_FOLDER = "-i"
+OUTPUT_FOLDER = "-o"
+
+# Default Folder Names
 DATA = "data"
 FACE_IMAGES_FOLDER = "images_with_faces"
 CLASSIFIED_CROPS = "classified_crops"
-SCANNED_IMAGE_LIST = "scanned.npy"
 
+# Default Paths
 FACE_IMAGES_PATH = os.path.join(DATA, FACE_IMAGES_FOLDER)
 CLASSIFIED_CROPS_PATH = os.path.join(DATA, CLASSIFIED_CROPS)
 
 
-def load_scanned_image_list():
+def load_scanned_image_list(input_folder):
     # Get a list of scanned images so no rescan.
     try:
-        return np.load(os.path.join(FACE_IMAGES_PATH, SCANNED_IMAGE_LIST)).tolist()
+        if input_folder is not None:
+            return np.load(os.path.join(input_folder, SCANNED_IMAGE_LIST)).tolist()
+        else:
+            return np.load(os.path.join(FACE_IMAGES_PATH, SCANNED_IMAGE_LIST)).tolist()
     except FileNotFoundError:
         return []
 
 
-def save_scanned_image_list(sc_list, image_names):
+def save_scanned_image_list(sc_list, image_names, input_folder):
     # Save list of scanned images so no rescan.
     for i in image_names:
         if i not in sc_list:
             sc_list.append(i)
-    np.save(os.path.join(FACE_IMAGES_PATH, SCANNED_IMAGE_LIST), sc_list)
+    if input_folder is not None:
+        np.save(os.path.join(input_folder, SCANNED_IMAGE_LIST), sc_list)
+    else:
+        np.save(os.path.join(FACE_IMAGES_PATH, SCANNED_IMAGE_LIST), sc_list)
 
 
 def tensor_to_8b_array(img):
@@ -64,15 +86,20 @@ def tensor_to_8b_array(img):
     return cv2.cvtColor(cv2.rotate(np_img, cv2.ROTATE_90_CLOCKWISE), cv2.COLOR_RGB2BGR)
 
 
-def get_image(ignore_scanned):
+def get_image(ignore_scanned, input_folder):
     # Get a list of Image.Image(s) from FACE_IMAGES_PATH
 
-    sc_list = load_scanned_image_list()
+    sc_list = load_scanned_image_list(input_folder)
 
     if not os.path.isdir(FACE_IMAGES_PATH):
         return None
 
-    to_filter = os.listdir(FACE_IMAGES_PATH)
+    to_filter = []
+    if input_folder is not None:
+        to_filter = os.listdir(input_folder)
+    else:
+        to_filter = os.listdir(FACE_IMAGES_PATH)
+
     if ignore_scanned:
         to_filter = filter(lambda c: c not in sc_list, to_filter)
 
@@ -81,7 +108,7 @@ def get_image(ignore_scanned):
     image_names = list(filter(lambda n: os.path.splitext(
         n)[-1].lower() == IMG_FORMAT, to_filter))
 
-    save_scanned_image_list(sc_list, image_names)
+    save_scanned_image_list(sc_list, image_names, input_folder)
 
     images = map(lambda n: Image.open(
         os.path.join(FACE_IMAGES_PATH, n)), image_names)
@@ -97,7 +124,7 @@ def get_face_crops(model, images):
     times = []
     crops = []
 
-    print("detecting faces in image may take a while...")
+    print("detecting faces in images, may take a while...")
 
     for i, image in enumerate(images):
         t1 = time()
@@ -171,8 +198,10 @@ def classify_face_crops(crops):
 def create_class_folder(name):
     # Create folder for a class.
     path = os.path.join(CLASSIFIED_CROPS_PATH, name)
-    print(path)
-    os.mkdir(path)
+    try:
+        os.mkdir(path)
+    except FileExistsError:
+        return
 
 
 def get_index_dict(names):
@@ -197,7 +226,6 @@ def get_index_dict(names):
                 create_these.append(name)
                 continue
             else:
-                print(f"{name} in", classes)
                 # Get count of .pt files in a class folder
                 crop_count = len(list(filter(lambda f: os.path.splitext(
                     f)[-1] == CROP_FORMAT, os.listdir(os.path.join(CLASSIFIED_CROPS_PATH, name)))))
@@ -211,43 +239,73 @@ def get_index_dict(names):
     return index_dict
 
 
-def save_face_crops(crops, names):
+def save_face_crops(crops, names, output_folder):
     index_dict = get_index_dict(names)
-    print(index_dict)
+
     for i, folder_name in enumerate(names):
         index = index_dict[folder_name]
         index_dict[folder_name] += 1
 
         file_name = f"{index:03}{CROP_FORMAT}"
 
-        torch.save(crops[i], os.path.join(
-            CLASSIFIED_CROPS_PATH, folder_name, file_name))
+        if output_folder is not None:
+            torch.save(crops[i], os.path.join(
+                output_folder, folder_name, file_name))
+        else:
+            torch.save(crops[i], os.path.join(
+                CLASSIFIED_CROPS_PATH, folder_name, file_name))
+
+
+def get_locations():
+    # Get folders if flags are set
+    input_folder = None
+    output_folder = None
+    if INPUT_FOLDER in sys.argv:
+        try:
+            input_folder = sys.argv[sys.argv.index(INPUT_FOLDER) + 1]
+            if not os.path.isdir(input_folder):
+                input_folder = None
+        except IndexError:
+            input_folder = None
+
+    if OUTPUT_FOLDER in sys.argv:
+        try:
+            output_folder = sys.argv[sys.argv.index(OUTPUT_FOLDER) + 1]
+            if not os.path.isdir(output_folder):
+                os.mkdir(output_folder)
+        except IndexError:
+            output_folder = None
+
+    return input_folder, output_folder
 
 
 def run_detection():
     """
     ignore_scanned: 
         will ignore previously scanned images, stored as a numpy list.
-        -i flag when calling script will set ignore scanned to True
+        -s flag when calling script will set ignore scanned to True
     """
-
-    ignore_scanned = True if '-i' in sys.argv else False
+    input_folder, output_folder = get_locations()
+    ignore_scanned = True if IGNORE_SCANNED in sys.argv else False
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     thresholds = [0.6, 0.7, 0.7]
     model = MTCNN(thresholds=thresholds, keep_all=True, device=device)
 
-    images = get_image(ignore_scanned)           # map object of pillow images
+    # map object of pillow images
+    images = get_image(ignore_scanned, input_folder)
     if images is None:
         print("no data found")
         return
 
-    crops = get_face_crops(model, images)        # pytorch.Tensor
+    # pytorch.Tensor
+    crops = get_face_crops(model, images)
     if len(crops) < 1:
         print("no face crops")
         return
 
-    names = classify_face_crops(crops)           # list
-    save_face_crops(crops, names)
+    # list
+    names = classify_face_crops(crops)
+    save_face_crops(crops, names, output_folder)
     print("face crops saved")
 
 
