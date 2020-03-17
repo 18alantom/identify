@@ -160,7 +160,7 @@ def classify_face_crops(crops):
     print("Enter full name of the displayed crop.\nPress:\
         \n\t1. 'return': accept crop after entering name\
         \n\t2. 'esc': to discard invalid crop")
-    for crop in crops:
+    for i, crop in enumerate(crops):
         cv2.imshow("face", tensor_to_8b_array(crop))
 
         name = []
@@ -192,15 +192,17 @@ def classify_face_crops(crops):
                     print("enter name")
                     continue
                 else:
-                    names.append(''.join(name).lower().replace(' ', '_'))
-                    crops_accepted.append(crop)
+                    names.append(''.join(
+                        name).lower().replace(' ', '_'))
+                    crops_accepted.append(crop.clone())
                     break
             # Discard crop
             elif key == 27:
                 # 27: ESC
                 break
 
-    return names
+    del crops
+    return names, torch.stack(crops_accepted)
 
 
 def create_class_folder(name):
@@ -315,8 +317,8 @@ def run_detection():
         print("no face crops")
         return
 
-    # list
-    names = classify_face_crops(crops)
+    # list of names and accepted crops
+    names, crops = classify_face_crops(crops)
     save_face_crops(crops, names, output_folder)
     print("face crops saved")
 
