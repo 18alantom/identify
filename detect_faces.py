@@ -37,8 +37,8 @@ from PIL import Image
 from models.mtcnn import MTCNN
 
 # File ext and names
-IMG_FORMAT = ".jpg"
-CROP_FORMAT = ".pt"
+IMG_EXTENSION = ".jpg"
+IMG_FORMAT = "jpeg"
 SCANNED_IMAGE_LIST = "scanned.npy"
 
 # Flags
@@ -78,12 +78,20 @@ def save_scanned_image_list(sc_list, image_names, input_folder):
         np.save(os.path.join(FACE_IMAGES_PATH, SCANNED_IMAGE_LIST), sc_list)
 
 
-def tensor_to_8b_array(img):
-    # Convert the detection crop to a numpy array readable by PIL
+def tensor_to_8b_array(ten):
+    # Crop tensor to cv2 showable numpy array.
+    np_img = np.uint8((ten.numpy() + 1) * 128 - 0.5).T
+    HORIZONTAL_FLIP = 1
+    return cv2.cvtColor(cv2.flip(cv2.rotate
+                                 (np_img, cv2.ROTATE_90_CLOCKWISE),
+                                 HORIZONTAL_FLIP), cv2.COLOR_RGB2BGR)
 
-    np_img = np.uint8((img.numpy() + 1) * 128 - 0.5).T
-    # return cv2 showable
-    return cv2.cvtColor(cv2.rotate(np_img, cv2.ROTATE_90_CLOCKWISE), cv2.COLOR_RGB2BGR)
+
+def tensor_to_PIL_img(ten):
+    # Convert to PIL img for saving, tensors take a lot of space.
+    # temp = np.uint8((ten + 1)*128 - 0.5).T
+    # return Image.fromarray(temp).rotate(rot)
+    return Image.fromarray(cv2.cvtColor(tensor_to_8b_array(ten), cv2.COLOR_BGR2RGB))
 
 
 def get_image(ignore_scanned, input_folder):
@@ -106,7 +114,7 @@ def get_image(ignore_scanned, input_folder):
     # For some reason the code doesn't work without conversion to list
     # Confound me!
     image_names = list(filter(lambda n: os.path.splitext(
-        n)[-1].lower() == IMG_FORMAT, to_filter))
+        n)[-1].lower() == IMG_EXTENSION, to_filter))
 
     save_scanned_image_list(sc_list, image_names, input_folder)
 
@@ -228,7 +236,7 @@ def get_index_dict(names):
             else:
                 # Get count of .pt files in a class folder
                 crop_count = len(list(filter(lambda f: os.path.splitext(
-                    f)[-1] == CROP_FORMAT, os.listdir(os.path.join(CLASSIFIED_CROPS_PATH, name)))))
+                    f)[-1] == IMG_EXTENSION, os.listdir(os.path.join(CLASSIFIED_CROPS_PATH, name)))))
                 index_dict[name] = crop_count
 
     # Create folders for classes if not present
@@ -240,20 +248,24 @@ def get_index_dict(names):
 
 
 def save_face_crops(crops, names, output_folder):
+    # Will save the pytorch tensors as PIL Images (.JPEG)
+    # Using torch.save takes up a lot of space ~27MB per crop
     index_dict = get_index_dict(names)
 
     for i, folder_name in enumerate(names):
         index = index_dict[folder_name]
         index_dict[folder_name] += 1
 
-        file_name = f"{index:03}{CROP_FORMAT}"
+        file_name = f"{index:03}{IMG_EXTENSION}"
 
+        path = ""
         if output_folder is not None:
-            torch.save(crops[i], os.path.join(
-                output_folder, folder_name, file_name))
+            path = os.path.join(
+                output_folder, folder_name, file_name)
         else:
-            torch.save(crops[i], os.path.join(
-                CLASSIFIED_CROPS_PATH, folder_name, file_name))
+            path = os.path.join(
+                CLASSIFIED_CROPS_PATH, folder_name, file_name)
+        tensor_to_PIL_img(crops[i]).save(path, IMG_FORMAT)
 
 
 def get_locations():
