@@ -2,6 +2,8 @@
 Get some stats such as detection fps for detection running on a 
 given video stream which may be running using CNN or HOG or may 
 be bypassed.
+
+detection method depends on sys.argv[1] see set_param_run()
 """
 import sys
 import dlib
@@ -107,9 +109,15 @@ def set_param_run():
     """
     Get benchmarks for one of the detection methods for the given parameters
     """
-    # method = None
-    # method = 'hog'
     method = 'cnn'
+    try:
+        m = sys.argv[1]
+        if m == 'hog':
+            method = 'hog'
+        elif m == 'none':
+            method = None
+    except IndexError:
+        method = 'cnn'
 
     # Parameters
     scale = 0.5

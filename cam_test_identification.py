@@ -1,3 +1,4 @@
+# TODO: Incomplete complete it
 """
 Get some stats such as detection fps for detection running on a 
 given video stream which may be running using CNN or HOG or may 
@@ -12,7 +13,10 @@ from models.mtcnn import MTCNN
 from models.inception_resnet_v1 import InceptionResnetV1
 
 CROP_FILE_TYPE = ".pt"
-FACE_CROP_PATH = "data/face_crops"
+DATA = "data"
+CAPTURED_FACE_CROP_FOLDER = "captured_face_crops"
+DETECTED_FACE_CROP_FOLDER = "detected_face_crops"
+FACE_CROP_PATH = os.path.join(DATA, CAPTURED_FACE_CROP_FOLDER)
 EMBEDDINGS_PATH = "data/embeddings"
 EMBED_NAME = "embed_dict.pt"
 EMBEDS = "embeddings"
