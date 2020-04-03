@@ -72,19 +72,19 @@ def load_scanned_image_list(input_folder):
         return []
 
 
-def get_image(ignore_scanned, input_folder):
+def get_image(ignore_scanned, input=None):
     # Get a list of Image.Image(s) from FACE_IMAGES_PATH
+    input_folder = FACE_IMAGES_PATH
+    if input is not None:
+        input_folder = input
 
     sc_list = load_scanned_image_list(input_folder)
 
-    if not os.path.isdir(FACE_IMAGES_PATH):
+    if not os.path.isdir(input_folder):
         return None
 
     to_filter = []
-    if input_folder is not None:
-        to_filter = os.listdir(input_folder)
-    else:
-        to_filter = os.listdir(FACE_IMAGES_PATH)
+    to_filter = os.listdir(input_folder)
 
     if ignore_scanned:
         to_filter = filter(lambda c: c not in sc_list, to_filter)
@@ -97,7 +97,7 @@ def get_image(ignore_scanned, input_folder):
     save_scanned_image_list(sc_list, image_names, input_folder)
 
     images = map(lambda n: Image.open(
-        os.path.join(FACE_IMAGES_PATH, n)), image_names)
+        os.path.join(input_folder, n)), image_names)
 
     return images
 
@@ -163,6 +163,7 @@ def classify_face_crops(crops):
 
     del crops
     return names, torch.stack(crops_accepted)
+
 
 def get_locations():
     # Get folders if flags are set

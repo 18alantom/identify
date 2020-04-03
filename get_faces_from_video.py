@@ -2,7 +2,6 @@
 Detect and Store Faces.
 
 Flags:
-    -i: input folder of images, defaults to preset value if invalid or not present
     -o: output folder for crops, defaults to preset value if invalid or not present
 
 Example:

@@ -65,32 +65,35 @@ def get_face_crops(model, images, is_single=False):
     return crops
 
 
-def create_class_folder(name):
+def create_class_folder(name, output_folder):
     # Create folder for a class.
-    path = os.path.join(CLASSIFIED_CROPS_PATH, name)
+    path = os.path.join(output_folder, name)
     try:
         os.mkdir(path)
     except FileExistsError:
         return
 
 
-def get_index_dict(names):
+def get_index_dict(names, output=None):
     # Returns the index of the crop to be saved in a class folder.
     # Also creates class folder if it isn't present.
     index_dict = {}
     create_these = []
+    output_folder = CLASSIFIED_CROPS_PATH
+    if output is not None:
+        output_folder = output
 
     # Init index_dict
     for name in names:
         index_dict[name] = 0
 
     # Create classified crops folder and class folders if not present.
-    if not os.path.isdir(CLASSIFIED_CROPS_PATH):
-        os.mkdir(CLASSIFIED_CROPS_PATH)
+    if not os.path.isdir(output_folder):
+        os.mkdir(output_folder)
         create_these = names
     # Get first index of new image to be saved.
     else:
-        classes = os.listdir(CLASSIFIED_CROPS_PATH)
+        classes = os.listdir(output_folder)
         for name in names:
             if not name in classes:
                 create_these.append(name)
@@ -98,21 +101,25 @@ def get_index_dict(names):
             else:
                 # Get count of .pt files in a class folder
                 crop_count = len(list(filter(lambda f: os.path.splitext(
-                    f)[-1] == IMG_EXTENSION, os.listdir(os.path.join(CLASSIFIED_CROPS_PATH, name)))))
+                    f)[-1] == IMG_EXTENSION, os.listdir(os.path.join(output_folder, name)))))
                 index_dict[name] = crop_count
 
     # Create folders for classes if not present
     for name in create_these:
         index_dict[name] = 0
-        create_class_folder(name)
+        create_class_folder(name, output_folder)
 
     return index_dict
 
 
-def save_face_crops(crops, names, output_folder):
+def save_face_crops(crops, names, output):
     # Will save the pytorch tensors as PIL Images (.JPEG)
     # Using torch.save takes up a lot of space ~27MB per crop
-    index_dict = get_index_dict(names)
+    index_dict = get_index_dict(names, output)
+
+    output_folder = CLASSIFIED_CROPS_PATH
+    if output is not None:
+        output_folder = output
 
     for i, folder_name in enumerate(names):
         index = index_dict[folder_name]
@@ -120,11 +127,6 @@ def save_face_crops(crops, names, output_folder):
 
         file_name = f"{index:03}{IMG_EXTENSION}"
 
-        path = ""
-        if output_folder is not None:
-            path = os.path.join(
-                output_folder, folder_name, file_name)
-        else:
-            path = os.path.join(
-                CLASSIFIED_CROPS_PATH, folder_name, file_name)
+        path = os.path.join(
+            output, folder_name, file_name)
         tensor_to_PIL_img(crops[i]).save(path, IMG_FORMAT)
