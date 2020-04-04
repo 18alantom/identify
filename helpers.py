@@ -2,8 +2,10 @@ import os
 import cv2
 import torch
 import numpy as np
+
 from time import time
 from PIL import Image
+from scipy import stats
 
 # File ext and names
 IMG_EXTENSION = ".jpg"
@@ -128,5 +130,81 @@ def save_face_crops(crops, names, output):
         file_name = f"{index:03}{IMG_EXTENSION}"
 
         path = os.path.join(
-            output, folder_name, file_name)
+            output_folder, folder_name, file_name)
         tensor_to_PIL_img(crops[i]).save(path, IMG_FORMAT)
+
+
+def get_embeddings(dataloader, model):
+    """
+    dataloader: pytorch DataLoader of n samples
+    model: pytorch models used to generate embedding of shape (1,512).
+
+    return: 
+        embeds: tensor, shape (n,512)
+        labels: int tensor, shape (n)
+    """
+    embeds = []
+    labels = []
+    model.eval()
+    for d in dataloader:
+        labels.append(d[1])
+        with torch.no_grad():
+            embeds.append(model(d[0]))
+    return torch.cat(embeds), torch.cat(labels)
+
+
+def predict(crops, embeds, labels, model, k=7, threshold=0.7):
+    """
+    crops: tensors, shape (m, 3, 160, 160).
+    embeds: tensors, shape (n, 512).
+    labels: int tensors, shape (n).
+    model: pytorch models used to generate embedding of shape (1,512).
+    k: neighbour classes to check.
+    threshold: distance more than this is invalid
+
+    return: int tensor, shape (m)
+    """
+    assert crops.shape[1] == 3, "invalid input shape"
+
+    inf = torch.tensor(float('inf'))
+    classes = []
+    model.eval()
+    with torch.no_grad():
+        for crop in crops:
+            dists = torch.norm(
+                embeds-model(crop.reshape(1, *crop.shape)), dim=1)
+            knn = torch.topk(dists, k, largest=False)
+            mask = dists[knn.indices] <= threshold
+            # Indices of distances below threshold
+            indices = knn.indices[mask]
+            k_classes = labels[indices]
+            try:
+                classes.append(stats.mode(k_classes).mode[0])
+            except IndexError:
+                classes.append(-1)
+    return torch.tensor(classes)
+
+
+def test_accuracy(dataloader, embeds, labels, model, k=7, thresh=0.7):
+    """
+    dataloader: pytorch DataLoader (test dataloader)
+    embeds: tensors, shape (n, 512).
+    labels: int tensors, shape (n).
+    model: pytorch models used to generate embedding of shape (1,512).
+    k: neighbour classes to check.
+    threshold: distance more than this is invalid
+
+    return: float
+    """
+    batch_count = int(np.ceil(len(dataloader.dataset)/dataloader.batch_size))
+    accuracy = 0
+
+    for batch in dataloader:
+        crops_t, labels_t = batch
+        bs = torch.tensor(len(labels_t)).float()
+
+        classes = predict(crops_t, embeds, labels, model, k, thresh)
+        batch_accuracy = (classes == labels_t).sum().float()/bs
+        accuracy += batch_accuracy
+    accuracy /= batch_count
+    return accuracy.item()

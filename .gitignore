@@ -15,6 +15,9 @@ temp.*
 # Generated data
 data/
 
+# Tuned model and threshold
+models/tuned
+
 # Distribution / packaging
 .Python
 build/
