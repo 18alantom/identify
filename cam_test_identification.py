@@ -5,146 +5,175 @@ given video stream which may be running using CNN or HOG or may
 be bypassed.
 """
 import cv2
-import time
 import os
-import numpy as np
+
 import torch
+import numpy as np
+
+from time import time
+from scipy import stats
+from pathlib import Path
+
 from models.mtcnn import MTCNN
-from models.inception_resnet_v1 import InceptionResnetV1
+from helpers import get_model
 
-CROP_FILE_TYPE = ".pt"
-DATA = "data"
-CAPTURED_FACE_CROP_FOLDER = "captured_face_crops"
-DETECTED_FACE_CROP_FOLDER = "detected_face_crops"
-FACE_CROP_PATH = os.path.join(DATA, CAPTURED_FACE_CROP_FOLDER)
-EMBEDDINGS_PATH = "data/embeddings"
-EMBED_NAME = "embed_dict.pt"
-EMBEDS = "embeddings"
-NAMES = "names"
+MODEL_PATH = Path("models")
+WEIGHTS_PATH = MODEL_PATH / "tuned"
+WEIGHTS_FILE = "inception_resnet_v1_tuned.pt"
+THRESH_FILE = "threshold.pt"
 
+DATA = Path("data")
+EMBED_FILE = "embeddings.pt"
 
-def get_embeds():
-    embed_path = os.path.join(EMBEDDINGS_PATH, EMBED_NAME)
-    not_present = "no embeds present"
-    if not os.path.isdir(EMBEDDINGS_PATH):
-        print(not_present)
-        return None
-    elif not os.path.isfile(embed_path):
-        print(not_present)
-        return None
-
-    return torch.load(embed_path)
+DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+BORDER_COLOR = (255, 105, 180)
+LINE_THICKNESS = 2
 
 
-def cnn_detector_identifier(rgb_img, model_det, model_iden, landmarks, thresh, border_color, line_width, embeds, names, show_box):
-    crop_tensor = model_det.forward(rgb_img)
-    if crop_tensor is None:
-        return rgb_img
-
-    crop_tensor = crop_tensor.reshape(1, 3, 160, 160)
-    embed_tensor = model_iden.forward(crop_tensor)
-
-    # Calculating distance
-    diff_pow = torch.pow(embeds - embed_tensor, 2)
-    mask = torch.isnan(diff_pow)
-    if torch.any(mask):
-        diff_pow[mask] = 0
-    dist = torch.pow(diff_pow.sum(axis=1), 0.5)
-
-    print(f"embed distances: {dist}")
-    print(names[dist.argmin()])
-
-    if not show_box:
-        return rgb_img
-
-    # FIXME: Write code to show a labelled box with distance.
-
-    boxes, probs = model_det.detect(rgb_img)
-
-    if probs[0] == None:
-        return rgb_img
-
-    img_boxed = rgb_img.copy()
-
-    # Boxing the face
-    for p, box in zip(probs, boxes):
-        if p < thresh:
-            continue
-
-        p1 = (box[0], box[1])
-        p2 = (box[2], box[3])
-
-        cv2.putText(img_boxed, str(p), (p1[0], int(p1[1]+20)), cv2.FONT_HERSHEY_SIMPLEX,
-                    0.6, border_color, line_width)
-        cv2.rectangle(
-            img_boxed, p1, p2, color=border_color, thickness=line_width)
-
-    return img_boxed
+def get_embeddings():
+    if (DATA/EMBED_FILE).exists():
+        return torch.load(DATA/EMBED_FILE)
+    return None
 
 
-def run_cam_test(scale, landmarks, device, thresh, line_width, border_color, show_box):
-    embeds_names = get_embeds()
-    embeds = embeds_names[EMBEDS]
-    names = embeds_names[NAMES]
+def predict(embeds, saved_embeds, saved_classes, saved_labels, k=7, threshold=1.595):
+    classes = []
+    for embed in embeds:
+        dists = torch.norm(saved_embeds - embed, dim=1)
+        knn = torch.topk(dists, k)
+        mask = knn.values < threshold
+        min_dist = min(knn.values).item()
+        indices = knn.indices[mask]
+        try:
+            mode = stats.mode(saved_labels[indices]).mode[0]
+            cls = saved_classes[mode]
+        except IndexError:
+            cls = 'unidentified'
+        classes.append((cls, min_dist))
+    return classes
 
-    thresholds = [0.8, 0.9, 0.9]  # Reduce this if not detecting
-    model_det = MTCNN(thresholds=thresholds, device=device)
-    model_det.eval()
-    model_iden = InceptionResnetV1(device=device)
-    model_iden.eval()
 
-    cam = cv2.VideoCapture(0)
-    times = []
+def detect_identify(scale, thresholds, saved_embeds, saved_labels, saved_classes, k, id_threshold):
+    times = {
+        "complete": [],
+        "mtcnn": [],
+        "mtcnn_detect": [],
+        "inception_resnet": [],
+        "prediction": [],
+        "display": [],
+        "total": []
+    }
 
-    y1 = time.time()
+    frames_shown = 0
+    t_x = time()
+    # Transform after reading frame (scale and to RGB)
+    def tr_1(i): return cv2.cvtColor(cv2.resize(
+        i, (0, 0), fx=scale, fy=scale), cv2.COLOR_BGR2RGB)
+    # Transform before displaying image (to BGR)
+    def tr_2(i): return cv2.cvtColor(i, cv2.COLOR_RGB2BGR)
+
+    model_identifier = get_model(WEIGHTS_PATH/WEIGHTS_FILE, DEVICE)
+    model_detector = MTCNN(thresholds=thresholds,
+                           device=DEVICE, keep_all=True)
+
+    model_identifier.eval()
+    model_detector.eval()
+
+    vc = cv2.VideoCapture(0)
+
     while True:
-        ret_val, img = cam.read()
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img = cv2.resize(img, (0, 0), fx=scale, fy=scale)
+        frames_shown += 1
+        t1 = time()
 
-        t1 = time.time()
-        img = cnn_detector_identifier(img, model_det, model_iden, landmarks, thresh,
-                                      border_color, line_width, embeds, names, show_box)
-        t2 = time.time()
+        is_read, img = vc.read()
+        img_bgr = cv2.resize(img, (0, 0), fx=scale, fy=scale)
 
-        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-        times.append(t2 - t1)
+        img = tr_1(img_bgr)
 
-        cv2.imshow('my webcam', img)
+        with torch.no_grad():
+            t2 = time()
+            crop_tensors = model_detector(img)
+
+            t3 = time()
+            boxes, probs = model_detector.detect(img)
+
+            t4 = time()
+            if crop_tensors is not None:
+                embeds = model_identifier(crop_tensors)
+
+            t5 = time()
+            if crop_tensors is not None:
+                classes = predict(embeds, saved_embeds,
+                                  saved_classes, saved_labels, k, id_threshold)
+            t6 = time()
+
+        img_boxed = img.copy()
+        if boxes is not None:
+            for i, box in enumerate(boxes):
+                p1 = (box[0], box[1])
+                p2 = (box[2], box[3])
+
+                cls, dist = classes[i]
+                st = f"{cls} {dist:0.3f}"
+
+                cv2.putText(img_boxed, st, (int(p1[0]+10), int(p1[1]+20)), cv2.FONT_HERSHEY_COMPLEX,
+                            0.6, (255, 255, 255), 2)
+                cv2.rectangle(img_boxed, p1, p2, color=BORDER_COLOR,
+                              thickness=LINE_THICKNESS)
+
+        img_boxed = tr_2(img_boxed)
+
+        cv2.imshow('cam', img_boxed)
+        t7 = time()
+
+        times['complete'].append(t7 - t1)
+        times['mtcnn'].append(t3 - t2)
+        times['mtcnn_detect'].append(t4 - t3)
+        times['inception_resnet'].append(t5 - t4)
+        times['prediction'].append(t6 - t5)
+        times['display'].append(t7 - t6)
+
         if cv2.waitKey(1) == 27:
-            break  # esc to quit
-    y2 = time.time()
+            break
 
+    vc.release()
     cv2.destroyAllWindows()
-    fps = len(times)/(y2 - y1)
-
-    print(f"avg detection time: {np.array(times).mean()*1000:0.2f} ms")
-    print(f"frames detected: {len(times)}")
-    print(f"cam on for: {y2 - y1:0.2f}")
-    print(f"avg fps: {fps: 0.2f}")
+    t_y = time()
+    times['total'].append(t_y - t_x)
+    return times, frames_shown
 
 
-def set_param_run():
-    """
-    Get benchmarks for one of the detection methods for the given parameters
-    """
+def print_stats(times, frames_shown):
+    lj = 20
+    for key in times.keys():
+        if key != "total":
+            avg = np.array(times[key]).mean()*1000
+            print(f"{key.ljust(20)} {avg:0.3f} ms")
 
-    # Parameters
-    scale = 0.5
-    cnn_landmarks = True
-    cnn_thresh = 0.95
-    line_width = 1
-    border_color = (0, 200, 0)
-    show_box = False
-
-    # Check if GFX present and use.
-    if torch.cuda.is_available():
-        cnn_device = torch.device('cuda')
-    else:
-        cnn_device = torch.device('cpu')
-
-    run_cam_test(scale, cnn_landmarks, cnn_device,
-                 cnn_thresh, line_width, border_color, show_box)
+        else:
+            tot = times[key][0]
+            print(f"{'total time'.ljust(20)} {tot} s")
+            print(f"{'frames:'.ljust(20)} {frames_shown}")
+            print(f"{'fps'.ljust(20)} {tot/frames_shown}")
 
 
-set_param_run()
+def main():
+    id_threshold = torch.load(WEIGHTS_PATH/THRESH_FILE)
+    thresholds = [0.8, 0.9, 0.9]
+    scale = 1
+    k = 7
+
+    em = get_embeddings()
+
+    saved_embeds = em["embeds"]
+    saved_labels = em["labels"]
+    saved_classes = em["classes"]
+
+    print(f"distance threshold set at: {id_threshold}")
+    times, frames_shown = detect_identify(scale, thresholds, saved_embeds,
+                                          saved_labels, saved_classes, k, id_threshold)
+
+    print_stats(times, frames_shown)
+
+
+main()

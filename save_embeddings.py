@@ -12,9 +12,8 @@ from torchvision import datasets, transforms
 from pathlib import Path
 from collections import OrderedDict
 
-from helpers import get_embeddings
+from helpers import get_embeddings, get_model
 from torch.utils.data import DataLoader
-from models.inception_resnet_v1 import InceptionResnetV1
 
 MODEL_PATH = Path("models")
 WEIGHTS_PATH = MODEL_PATH / "tuned"
@@ -29,13 +28,6 @@ DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 INP = "input"
 OUP = "output"
 WEI = "weights"
-
-
-def get_model(weights_path):
-    model = InceptionResnetV1(device=DEVICE)
-    state_dict = torch.load(weights_path)
-    model.load_state_dict(state_dict)
-    return model
 
 
 def get_dataloader(crops_path):
@@ -90,11 +82,13 @@ def main():
         WEIGHTS_FILE if flags[WEI] is None else flags[WEI]/WEIGHTS_FILE
     embed_path = DATA/EMBED_FILE if flags[OUP] is None else flags[OUP]
 
-    model = get_model(weights_path)
+    model = get_model(weights_path, DEVICE)
     dataloader = get_dataloader(crops_path)
     embeds, labels = get_embeddings(dataloader, model)
-    save_this = OrderedDict({"embeds": embeds, "labels": labels})
+    save_this = OrderedDict(
+        {"embeds": embeds, "labels": labels, "classes": dataloader.dataset.classes})
     torch.save(save_this, embed_path)
     print(f"embeddings of {len(dataloader.dataset)} crops saved")
+
 
 main()

@@ -7,6 +7,8 @@ from time import time
 from PIL import Image
 from scipy import stats
 
+from models.inception_resnet_v1 import InceptionResnetV1
+
 # File ext and names
 IMG_EXTENSION = ".jpg"
 IMG_FORMAT = "jpeg"
@@ -65,6 +67,13 @@ def get_face_crops(model, images, is_single=False):
     print(f"time: {torch.tensor(times).mean() * 1000:0.2f} ms mean per image.")
 
     return crops
+
+
+def get_model(weights_path, device):
+    model = InceptionResnetV1(device=device)
+    state_dict = torch.load(weights_path)
+    model.load_state_dict(state_dict)
+    return model
 
 
 def create_class_folder(name, output_folder):
