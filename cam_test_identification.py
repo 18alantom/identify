@@ -171,7 +171,6 @@ def print_stats(times, frames_shown):
 
 def main():
     id_threshold = torch.load(WEIGHTS_PATH/THRESH_FILE)
-    id_threshold = 2.0
     thresholds = [0.8, 0.9, 0.9]
     scale = 0.75
     k = 7

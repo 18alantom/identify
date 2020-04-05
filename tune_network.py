@@ -150,9 +150,8 @@ def test_model(model, test_dl, embeds, labels,  k, thresh):
 
 
 def get_threshold(model, embeds, labels):
-    sim_max_mean, dis_min_mean = show_embed_metrics(embeds, labels)
-    diff = dis_min_mean - sim_max_mean
-    thresh = np.round(sim_max_mean.item(), 1)
+    diff, overall = show_embed_metrics(embeds, labels)
+    thresh = np.round(overall.item(), 3)
 
     if diff < 0:
         print(f"\nwarning: difference is negative: {diff:0.4f}")
@@ -227,5 +226,6 @@ def main():
 
     # Save the state_dict and threshold as .pt files.
     save_values(model, thresh, output_path)
+
 
 main()

@@ -52,6 +52,7 @@ def show_min_max(embeds_cross_dist, labels_1, labels_2, show_sim=True, show_per_
                 print(f"{d}max: {mx:0.2f}", end="\t")
                 print(f"min: {mn:0.2f}{d}")
 
+    overall = torch.tensor(log_dist).mean()
     print('---')
     print(f"alltime max(max) = {max(max_dist)}")
     print(f"alltime min(max) = {min(max_dist)}")
@@ -61,13 +62,13 @@ def show_min_max(embeds_cross_dist, labels_1, labels_2, show_sim=True, show_per_
     print(f"alltime max(min) = {max(min_dist)}")
     print(f"mean of min      = {torch.tensor(min_dist).mean()}")
     print()
-    print(f"overall mean     = {torch.tensor(log_dist).mean()}")
+    print(f"overall mean     = {overall}")
     print()
 
     if show_sim:
-        return torch.tensor(max_dist).mean()
+        return torch.tensor(max_dist).mean(), overall
     else:
-        return torch.tensor(min_dist).mean()
+        return torch.tensor(min_dist).mean(), overall
 
 
 def show_embed_metrics(embeds, labels, show_per_class=False, show_scores=False):
@@ -77,10 +78,10 @@ def show_embed_metrics(embeds, labels, show_per_class=False, show_scores=False):
     """
     print(f'Showing embedding distance metrics, {len(labels)} embeds: ')
     dist_matr = get_cross_dist(embeds, embeds)
-    sim_max_mean = show_min_max(dist_matr, labels, labels, show_sim=True,
-                                show_per_class=show_per_class, show_scores=show_scores)
+    sim_max_mean, overall = show_min_max(dist_matr, labels, labels, show_sim=True,
+                                         show_per_class=show_per_class, show_scores=show_scores)
     print('---')
-    dis_min_mean = show_min_max(dist_matr, labels, labels, show_sim=False,
-                                show_per_class=show_per_class, show_scores=show_scores)
+    dis_min_mean, _ = show_min_max(dist_matr, labels, labels, show_sim=False,
+                                   show_per_class=show_per_class, show_scores=show_scores)
     print('---')
-    return sim_max_mean, dis_min_mean
+    return dis_min_mean - sim_max_mean, overall
