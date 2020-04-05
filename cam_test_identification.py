@@ -1,8 +1,4 @@
 """
-Get some stats such as detection fps for detection running on a 
-given video stream which may be running using CNN or HOG or may 
-be bypassed.
-
 Flags:
     -t: sets the threshold.
     -s: sets the input video stream scale (should be less than one).
