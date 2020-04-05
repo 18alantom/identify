@@ -12,8 +12,9 @@ temp.*
 # VSCode 
 .vscode/
 
-# Generated data
+# Generated data and temp
 data/
+temp/
 
 # Tuned model and threshold
 models/tuned

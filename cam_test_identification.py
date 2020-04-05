@@ -4,8 +4,9 @@ given video stream which may be running using CNN or HOG or may
 be bypassed.
 """
 
-import cv2
 import os
+import sys
+import cv2
 
 import torch
 import numpy as np
@@ -41,6 +42,7 @@ def predict(embeds, saved_embeds, saved_classes, saved_labels, k=7, threshold=1.
     classes = []
     for embed in embeds:
         dists = torch.norm(saved_embeds - embed, dim=1)
+        print(dists.max(), dists.min())
         knn = torch.topk(dists, k, largest=False)
         mask = knn.values < threshold
         min_dist = min(knn.values).item()
@@ -169,8 +171,18 @@ def print_stats(times, frames_shown):
             print(f"{'fps'.ljust(20)} {frames_shown/tot}")
 
 
+def get_flags():
+    if sys.argv[1] == '-t':
+        try:
+            return torch.tensor(float(sys.argv[2]))
+        except IndexError:
+            return None
+
+
 def main():
-    id_threshold = torch.load(WEIGHTS_PATH/THRESH_FILE)
+    flag_th = get_flags()
+    id_threshold = torch.load(
+        WEIGHTS_PATH/THRESH_FILE) if flag_th is None else flag_th
     thresholds = [0.8, 0.9, 0.9]
     scale = 0.75
     k = 7

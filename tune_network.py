@@ -1,9 +1,11 @@
 """
 Flags:
   -i: Input Folder   (folder where the training and test data are saved in subfolders 'train', 'test')
-  -o: Output Folder  (folder where the model state_dict is to be stored along with the threshold)
-  -e: Epochs         (number of epochs to train the model for) 
-  -r: Retune         (if the model was previously tuned, tune it more else will tune from scratch)
+  -o: Output Folder  (folder where the model state_dict is to be stored along with the threshold.)
+  -n: Name           (name of the weights file)
+  -e: Epochs         (number of epochs to train the model for.) 
+  -r: Retune         (if the model was previously tuned, tune it more else will tune from scratch.)
+  -c: Use CEL        (Uses CEL loss to train the model.)
 """
 from copy import deepcopy
 
@@ -20,7 +22,7 @@ from torch import nn
 from torch.utils.data import DataLoader, SubsetRandomSampler
 from torchvision import models, datasets, transforms
 
-from model_trainers import fit
+from model_trainers import dist_fit, std_fit
 from embed_metrics import show_embed_metrics
 from helpers import get_embeddings, test_accuracy, get_mean_std
 from models.inception_resnet_v1 import InceptionResnetV1
@@ -46,6 +48,8 @@ INP = "input"
 OUP = "output"
 EPC = "epochs"
 RET = "retune"
+CEL = "crossel"
+NAM = "name"
 
 
 def get_dataloader(data_path, use_transforms=True, get_split=True, drop_last=True, batch_size=5):
@@ -91,26 +95,35 @@ def get_flags():
         INP: "-i",
         OUP: "-o",
         EPC: "-e",
-        RET: "-r"
+        RET: "-r",
+        NAM: "-n",
+        CEL: "-c"
     }
     created_of = False
-    flag_values = {}
+    flag_values = {
+        INP: None,
+        OUP: None,
+        EPC: None,
+        RET: None,
+        NAM: None,
+        CEL: None
+    }
     for key in flags:
         try:
             idx = sys.argv.index(flags[key])
         except ValueError:
-            idx = -1
-        if idx > -1 and key != RET:
+            continue
+        if idx > -1 and key != CEL:
             try:
                 value = sys.argv[idx + 1]
             except IndexError:
                 flag_values[key] = None
+                print(f"invalid value for {key}, using default")
                 continue
-            if key == EPC:
-                try:
-                    flag_values[key] = int(value)
-                except:
-                    flag_values[key] = None
+            if key == NAM or key == RET:
+                flag_values[key] = value
+            elif key == EPC:
+                flag_values[key] = int(value)
             elif key == INP:
                 if (Path(value)/"train").exists() and (Path(value)/"test").exists():
                     flag_values[key] = Path(value)
@@ -118,29 +131,56 @@ def get_flags():
                     flag_values[key] = None
             else:
                 if Path(value).exists():
-                    flag_values[key] = value
+                    flag_values[key] = Path(value)
                 else:
                     Path(value).mkdir(parents=True)
                     created_of = True
                     flag_values[key] = Path(value)
-        elif idx > -1 and key == RET and not created_of:
+        elif idx > -1 and key == CEL:
             flag_values[key] = True
         else:
             flag_values[key] = None
     return flag_values
 
 
-def tune_network(model, train_dl, valid_dl, test_dl, data_count, epochs):
+def get_weight(dataset):
+    # Calculating the weight (due to unbalanced dataset)
+    weight = []
+    l = len(dataset)
+    for i, _ in enumerate(dataset.classes):
+        weight.append(1/np.count_nonzero(np.array(dataset.targets) == i))
+    return torch.tensor(weight)
+
+
+def tune_network(model, train_dl, valid_dl, test_dl, data_count, epochs, is_CEL):
     # Freeze all layers
     for param in model.parameters():
         param.requires_grad = False
     # Thaw last layer
     for param in model.last_linear.parameters():
         param.requires_grad = True
-    optim = torch.optim.Adam(params=model.last_linear.parameters())
 
-    _ = fit(model, optim, train_dl, valid_dl,
-            DEVICE, data_count, epochs=epochs)
+    if is_CEL:
+        in_features = model.last_linear.out_features
+        out_features = len(train_dl.dataset.classes)
+
+        model_ex = nn.Sequential(
+            model,
+            nn.Linear(in_features, out_features),
+            nn.LogSoftmax(dim=1)
+        )
+
+        params = list(model[0].last_linear.parameters()) + \
+            list(model[1].parameters())
+        optim = torch.optim.Adam(params)
+        loss_func = nn.CrossEntropyLoss(get_weight(train_dl.dataset))
+        _ = dist_fit(model, optim, train_dl, valid_dl,
+                     DEVICE, data_count, loss_func=loss_func, epochs=epochs)
+
+    else:
+        optim = torch.optim.Adam(params=model.last_linear.parameters())
+        _ = dist_fit(model, optim, train_dl, valid_dl,
+                     DEVICE, data_count, epochs=epochs)
 
 
 def test_model(model, test_dl, embeds, labels,  k, thresh):
@@ -162,17 +202,20 @@ def get_threshold(model, embeds, labels):
     return torch.tensor(thresh)
 
 
-def save_values(model, threshold, save_path):
+def save_values(model, threshold, save_path, weights_file=None):
+    weights_file = weights_file if weights_file is not None else WEIGHTS_FILE
     if not save_path.exists():
         save_path.mkdir()
 
-    for name, data in [(WEIGHTS_FILE, model.state_dict()), (THRESH_FILE, threshold)]:
+    for name, data in [(weights_file, model.state_dict()), (THRESH_FILE, threshold)]:
         torch.save(data, save_path/name)
     print("model and threshold saved")
 
 
 def main():
     flags = get_flags()
+    use_CEL = flags[CEL]
+    weights_file = flags[NAM]
 
     # Set k for accuracy testing.
     k = 7
@@ -180,8 +223,8 @@ def main():
     # Set epochs.
     epochs = 25 if flags[EPC] is None else flags[EPC]
 
-    # Set return param.
-    retune = flags[RET] is not None
+    # Set retune param.
+    retune = flags[RET]
 
     # Set data input paths.
     input_path = flags[INP]
@@ -197,7 +240,7 @@ def main():
     model = InceptionResnetV1(device=DEVICE)
     if retune:
         try:
-            state_dict = torch.load(output_path/WEIGHTS_FILE)
+            state_dict = torch.load(retune)
             model.load_state_dict(state_dict)
         except FileNotFoundError:
             print("model weights not found, can't retune")
@@ -213,7 +256,8 @@ def main():
                               get_split=False, drop_last=False, batch_size=16)
 
     # Function that calls fit using Adam optimiser and the passed parameters.
-    tune_network(model, train_dl, valid_dl, test_dl, data_count, epochs)
+    tune_network(model, train_dl, valid_dl, test_dl,
+                 data_count, epochs, use_CEL)
 
     # Embeddings used to calculate threshold and check accuracy.
     embeds, labels = get_embeddings(embed_dl, model)
@@ -225,7 +269,7 @@ def main():
     test_model(model, test_dl, embeds, labels, k, thresh)
 
     # Save the state_dict and threshold as .pt files.
-    save_values(model, thresh, output_path)
+    save_values(model, thresh, output_path, weights_file)
 
 
 main()
