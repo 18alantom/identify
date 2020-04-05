@@ -55,7 +55,7 @@ def get_flags():
             continue
 
         if key == WEI:
-            if Path(value/WEIGHTS_FILE).exists():
+            if Path(value).exists():
                 flag_values[key] = Path(value)
             else:
                 flag_values[key] = None
@@ -79,7 +79,7 @@ def main():
     crops_path = DATA / \
         CROPS_PATH if flags[INP] is None else flags[INP]
     weights_path = WEIGHTS_PATH / \
-        WEIGHTS_FILE if flags[WEI] is None else flags[WEI]/WEIGHTS_FILE
+        WEIGHTS_FILE if flags[WEI] is None else flags[WEI]
     embed_path = DATA/EMBED_FILE if flags[OUP] is None else flags[OUP]
 
     model = get_model(weights_path, DEVICE)

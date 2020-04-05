@@ -5,7 +5,7 @@ Flags:
   -n: Name           (name of the weights file)
   -e: Epochs         (number of epochs to train the model for.) 
   -r: Retune         (if the model was previously tuned, tune it more else will tune from scratch.)
-  -c: Use CEL        (Uses CEL loss to train the model.)
+  -d: Use Dist Loss  (Uses DistLoss to train the model.)
 """
 from copy import deepcopy
 
@@ -48,7 +48,7 @@ INP = "input"
 OUP = "output"
 EPC = "epochs"
 RET = "retune"
-CEL = "crossel"
+DIL = "distloss"
 NAM = "name"
 
 
@@ -80,7 +80,9 @@ def get_dataloader(data_path, use_transforms=True, get_split=True, drop_last=Tru
             len(targets)), shuffle=True, stratify=targets, random_state=34, test_size=0.2)
 
         g = np.gcd(len(idx[0]), len(idx[1]))
-        batch_size = g if g > 4 and g < 16 else 5
+        batch_size = g if g > 4 and g < 32 else 10
+        if len(idx[0]) < 128:
+            batch_size = 5
 
         indices = {x: idx[i] for i, x in enumerate(SETS)}
         samplers = {x: SubsetRandomSampler(indices[x]) for x in SETS}
@@ -97,7 +99,7 @@ def get_flags():
         EPC: "-e",
         RET: "-r",
         NAM: "-n",
-        CEL: "-c"
+        DIL: "-d"
     }
     created_of = False
     flag_values = {
@@ -106,14 +108,14 @@ def get_flags():
         EPC: None,
         RET: None,
         NAM: None,
-        CEL: None
+        DIL: None
     }
     for key in flags:
         try:
             idx = sys.argv.index(flags[key])
         except ValueError:
             continue
-        if idx > -1 and key != CEL:
+        if idx > -1 and key != DIL:
             try:
                 value = sys.argv[idx + 1]
             except IndexError:
@@ -136,7 +138,7 @@ def get_flags():
                     Path(value).mkdir(parents=True)
                     created_of = True
                     flag_values[key] = Path(value)
-        elif idx > -1 and key == CEL:
+        elif idx > -1 and key == DIL:
             flag_values[key] = True
         else:
             flag_values[key] = None
@@ -152,7 +154,7 @@ def get_weight(dataset):
     return torch.tensor(weight)
 
 
-def tune_network(model, train_dl, valid_dl, test_dl, data_count, epochs, is_CEL):
+def tune_network(model, train_dl, valid_dl, test_dl, data_count, epochs, is_DIL):
     # Freeze all layers
     for param in model.parameters():
         param.requires_grad = False
@@ -160,7 +162,7 @@ def tune_network(model, train_dl, valid_dl, test_dl, data_count, epochs, is_CEL)
     for param in model.last_linear.parameters():
         param.requires_grad = True
 
-    if is_CEL:
+    if not is_DIL:
         in_features = model.last_linear.out_features
         out_features = len(train_dl.dataset.classes)
 
@@ -170,12 +172,12 @@ def tune_network(model, train_dl, valid_dl, test_dl, data_count, epochs, is_CEL)
             nn.LogSoftmax(dim=1)
         )
 
-        params = list(model[0].last_linear.parameters()) + \
-            list(model[1].parameters())
+        params = list(model_ex[0].last_linear.parameters()) + \
+            list(model_ex[1].parameters())
         optim = torch.optim.Adam(params)
         loss_func = nn.CrossEntropyLoss(get_weight(train_dl.dataset))
-        _ = dist_fit(model, optim, train_dl, valid_dl,
-                     DEVICE, data_count, loss_func=loss_func, epochs=epochs)
+        _ = std_fit(model_ex, optim, train_dl, valid_dl,
+                    DEVICE, data_count, loss_func=loss_func, epochs=epochs)
 
     else:
         optim = torch.optim.Adam(params=model.last_linear.parameters())
@@ -214,7 +216,7 @@ def save_values(model, threshold, save_path, weights_file=None):
 
 def main():
     flags = get_flags()
-    use_CEL = flags[CEL]
+    use_DIL = flags[DIL]
     weights_file = flags[NAM]
 
     # Set k for accuracy testing.
@@ -257,7 +259,7 @@ def main():
 
     # Function that calls fit using Adam optimiser and the passed parameters.
     tune_network(model, train_dl, valid_dl, test_dl,
-                 data_count, epochs, use_CEL)
+                 data_count, epochs, use_DIL)
 
     # Embeddings used to calculate threshold and check accuracy.
     embeds, labels = get_embeddings(embed_dl, model)
