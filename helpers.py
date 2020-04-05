@@ -7,6 +7,8 @@ from time import time
 from PIL import Image
 from scipy import stats
 
+from torchvision.transforms import ToTensor
+from torchvision.datasets import ImageFolder
 from models.inception_resnet_v1 import InceptionResnetV1
 
 # File ext and names
@@ -19,6 +21,23 @@ CLASSIFIED_CROPS = "classified_crops"
 
 # Default Paths
 CLASSIFIED_CROPS_PATH = os.path.join(DATA, CLASSIFIED_CROPS)
+
+
+def get_mean_std(path):
+    """
+    returns mean and std of image
+    data located at the given path.
+    """
+    dataset = ImageFolder(path)
+    tr = ToTensor()
+    imgs = []
+    for i in dataset:
+        imgs.append(tr(i[0]))
+    # dataset
+    imgs = torch.stack(imgs)
+    mean = imgs.mean(axis=(0, 2, 3))
+    std = imgs.std(axis=(0, 2, 3))
+    return mean, std
 
 
 def tensor_to_8b_array(ten):
@@ -49,7 +68,7 @@ def get_face_crops(model, images, is_single=False):
 
     for i, image in enumerate(images):
         t1 = time()
-        crop = model.forward(image)
+        crop = model(image)
         t2 = time()
         times.append(t2 - t1)
 

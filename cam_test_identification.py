@@ -1,9 +1,9 @@
-# TODO: Incomplete complete it
 """
 Get some stats such as detection fps for detection running on a 
 given video stream which may be running using CNN or HOG or may 
 be bypassed.
 """
+
 import cv2
 import os
 
@@ -15,7 +15,7 @@ from scipy import stats
 from pathlib import Path
 
 from models.mtcnn import MTCNN
-from helpers import get_model
+from helpers import get_model, get_mean_std
 
 MODEL_PATH = Path("models")
 WEIGHTS_PATH = MODEL_PATH / "tuned"
@@ -23,6 +23,7 @@ WEIGHTS_FILE = "inception_resnet_v1_tuned.pt"
 THRESH_FILE = "threshold.pt"
 
 DATA = Path("data")
+CLASSIFIED_CROPS = "classified_crops"
 EMBED_FILE = "embeddings.pt"
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -40,7 +41,7 @@ def predict(embeds, saved_embeds, saved_classes, saved_labels, k=7, threshold=1.
     classes = []
     for embed in embeds:
         dists = torch.norm(saved_embeds - embed, dim=1)
-        knn = torch.topk(dists, k)
+        knn = torch.topk(dists, k, largest=False)
         mask = knn.values < threshold
         min_dist = min(knn.values).item()
         indices = knn.indices[mask]
@@ -53,7 +54,10 @@ def predict(embeds, saved_embeds, saved_classes, saved_labels, k=7, threshold=1.
     return classes
 
 
-def detect_identify(scale, thresholds, saved_embeds, saved_labels, saved_classes, k, id_threshold):
+def detect_identify(mean, std, scale, thresholds, saved_embeds, saved_labels, saved_classes, k, id_threshold):
+    mean = mean.reshape(1, 3, 1, 1)
+    std = std.reshape(1, 3, 1, 1)
+
     times = {
         "complete": [],
         "mtcnn": [],
@@ -69,8 +73,15 @@ def detect_identify(scale, thresholds, saved_embeds, saved_labels, saved_classes
     # Transform after reading frame (scale and to RGB)
     def tr_1(i): return cv2.cvtColor(cv2.resize(
         i, (0, 0), fx=scale, fy=scale), cv2.COLOR_BGR2RGB)
+
     # Transform before displaying image (to BGR)
     def tr_2(i): return cv2.cvtColor(i, cv2.COLOR_RGB2BGR)
+
+    # Transform to set tensor from 0 to 1
+    def tr_3(t): return ((t + 1)*128 - 0.5)/255
+
+    # Transform to normalize the tensor using given mean and std.
+    def tr_4(t): return (t - mean)/std
 
     model_identifier = get_model(WEIGHTS_PATH/WEIGHTS_FILE, DEVICE)
     model_detector = MTCNN(thresholds=thresholds,
@@ -99,6 +110,7 @@ def detect_identify(scale, thresholds, saved_embeds, saved_labels, saved_classes
 
             t4 = time()
             if crop_tensors is not None:
+                crop_tensors = tr_4(tr_3(crop_tensors))
                 embeds = model_identifier(crop_tensors)
 
             t5 = time()
@@ -154,15 +166,17 @@ def print_stats(times, frames_shown):
             tot = times[key][0]
             print(f"{'total time'.ljust(20)} {tot} s")
             print(f"{'frames:'.ljust(20)} {frames_shown}")
-            print(f"{'fps'.ljust(20)} {tot/frames_shown}")
+            print(f"{'fps'.ljust(20)} {frames_shown/tot}")
 
 
 def main():
     id_threshold = torch.load(WEIGHTS_PATH/THRESH_FILE)
+    id_threshold = 2.0
     thresholds = [0.8, 0.9, 0.9]
-    scale = 1
+    scale = 0.75
     k = 7
 
+    mean, std = get_mean_std(DATA/CLASSIFIED_CROPS)
     em = get_embeddings()
 
     saved_embeds = em["embeds"]
@@ -170,7 +184,7 @@ def main():
     saved_classes = em["classes"]
 
     print(f"distance threshold set at: {id_threshold}")
-    times, frames_shown = detect_identify(scale, thresholds, saved_embeds,
+    times, frames_shown = detect_identify(mean, std, scale, thresholds, saved_embeds,
                                           saved_labels, saved_classes, k, id_threshold)
 
     print_stats(times, frames_shown)

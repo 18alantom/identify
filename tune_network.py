@@ -22,7 +22,7 @@ from torchvision import models, datasets, transforms
 
 from model_trainers import fit
 from embed_metrics import show_embed_metrics
-from helpers import get_embeddings, test_accuracy
+from helpers import get_embeddings, test_accuracy, get_mean_std
 from models.inception_resnet_v1 import InceptionResnetV1
 
 SETS = ['train', 'valid']
@@ -50,14 +50,19 @@ RET = "retune"
 
 def get_dataloader(data_path, use_transforms=True, get_split=True, drop_last=True, batch_size=5):
     # Returns DataLoader and datacount if using sampler (for split).
+    mean, std = get_mean_std(data_path)
     data_trans = None
     if use_transforms:
         data_trans = transforms.Compose([
             transforms.ColorJitter(0.3, 0.3, 0.3),
-            transforms.ToTensor()
+            transforms.ToTensor(),
+            transforms.Normalize(mean, std)
         ])
     else:
-        data_trans = transforms.ToTensor()
+        data_trans = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean, std)
+        ])
 
     dataset = datasets.ImageFolder(
         data_path, transform=data_trans)
@@ -222,6 +227,5 @@ def main():
 
     # Save the state_dict and threshold as .pt files.
     save_values(model, thresh, output_path)
-
 
 main()
