@@ -28,7 +28,7 @@ Store in folder structure:
            └── PERSON_TWO
                   └── 000.jpg
 
-// TODO: Make a better interface for this.
+// TODO: Make a GUI interface for this.
 """
 
 import os
@@ -37,47 +37,23 @@ import cv2
 import torch
 import numpy as np
 
-from helpers import get_face_crops, save_face_crops, tensor_to_8b_array
 from time import time
 from PIL import Image
-from models.mtcnn import MTCNN
-
-# File ext and names
-IMG_EXTENSION = ".jpg"
-SCANNED_IMAGE_LIST = "scanned.npy"
-
-# Flags
-IGNORE_SCANNED = "-s"
-INPUT_FOLDER = "-i"
-OUTPUT_FOLDER = "-o"
-
-# Default Folder Names
-DATA = "data"
-FACE_IMAGES_FOLDER = "images_with_faces"
-CLASSIFIED_CROPS = "classified_crops"
-
-# Default Paths
-FACE_IMAGES_PATH = os.path.join(DATA, FACE_IMAGES_FOLDER)
-CLASSIFIED_CROPS_PATH = os.path.join(DATA, CLASSIFIED_CROPS)
+from identify.models import MTCNN
+from identify.helpers.constants import SCANNED_IMAGE_LIST, IMG_EXTENSION
+from identify.helpers import get_face_crops, save_face_crops, tensor_to_8b_array
 
 
 def load_scanned_image_list(input_folder):
     # Get a list of scanned images so no rescan.
     try:
-        if input_folder is not None:
-            return np.load(os.path.join(input_folder, SCANNED_IMAGE_LIST)).tolist()
-        else:
-            return np.load(os.path.join(FACE_IMAGES_PATH, SCANNED_IMAGE_LIST)).tolist()
+        return np.load(os.path.join(input_folder, SCANNED_IMAGE_LIST)).tolist()
     except FileNotFoundError:
         return []
 
 
-def get_image(ignore_scanned, input=None):
+def get_image(input_folder, ignore_scanned):
     # Get a list of Image.Image(s) from FACE_IMAGES_PATH
-    input_folder = FACE_IMAGES_PATH
-    if input is not None:
-        input_folder = input
-
     sc_list = load_scanned_image_list(input_folder)
 
     if not os.path.isdir(input_folder):
@@ -107,10 +83,7 @@ def save_scanned_image_list(sc_list, image_names, input_folder):
     for i in image_names:
         if i not in sc_list:
             sc_list.append(i)
-    if input_folder is not None:
-        np.save(os.path.join(input_folder, SCANNED_IMAGE_LIST), sc_list)
-    else:
-        np.save(os.path.join(FACE_IMAGES_PATH, SCANNED_IMAGE_LIST), sc_list)
+    np.save(os.path.join(input_folder, SCANNED_IMAGE_LIST), sc_list)
 
 
 def classify_face_crops(crops):
@@ -165,43 +138,17 @@ def classify_face_crops(crops):
     return names, torch.stack(crops_accepted)
 
 
-def get_locations():
-    # Get folders if flags are set
-    input_folder = None
-    output_folder = None
-    if INPUT_FOLDER in sys.argv:
-        try:
-            input_folder = sys.argv[sys.argv.index(INPUT_FOLDER) + 1]
-            if not os.path.isdir(input_folder):
-                input_folder = None
-        except IndexError:
-            input_folder = None
-
-    if OUTPUT_FOLDER in sys.argv:
-        try:
-            output_folder = sys.argv[sys.argv.index(OUTPUT_FOLDER) + 1]
-            if not os.path.isdir(output_folder):
-                os.mkdir(output_folder)
-        except IndexError:
-            output_folder = None
-
-    return input_folder, output_folder
-
-
-def run_detection():
+def from_images(input_folder, output_folder, ignore_scanned, device):
     """
     ignore_scanned: 
         will ignore previously scanned images, stored as a numpy list.
         -s flag when calling script will set ignore scanned to True
     """
-    input_folder, output_folder = get_locations()
-    ignore_scanned = True if IGNORE_SCANNED in sys.argv else False
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    thresholds = [0.6, 0.7, 0.7]
-    model = MTCNN(thresholds=thresholds, keep_all=True, device=device)
+    # If detection is incorrect maybe change the MTCNN threshold.
+    model = MTCNN(keep_all=True, device=device)
 
     # map object of pillow images
-    images = get_image(ignore_scanned, input_folder)
+    images = get_image(input_folder, ignore_scanned)
     if images is None:
         print("no data found")
         return
@@ -218,4 +165,4 @@ def run_detection():
     print("face crops saved")
 
 
-run_detection()
+# run_detection()

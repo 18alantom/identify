@@ -7,7 +7,7 @@ from .utils.detect_face import detect_face, extract_face
 
 class PNet(nn.Module):
     """MTCNN PNet.
-    
+
     Keyword Arguments:
         pretrained {bool} -- Whether or not to load saved pretrained weights (default: {True})
     """
@@ -29,7 +29,8 @@ class PNet(nn.Module):
         self.training = False
 
         # Load pre trained weights on model init
-        state_dict_path = os.path.join(os.path.dirname(__file__),'./pre_trained_weights/pnet.pt')
+        state_dict_path = os.path.join(os.path.dirname(
+            __file__), './pre_trained_weights/pnet.pt')
         if os.path.isfile(state_dict_path):
             state_dict = torch.load(state_dict_path)
             self.load_state_dict(state_dict)
@@ -50,7 +51,7 @@ class PNet(nn.Module):
 
 class RNet(nn.Module):
     """MTCNN RNet.
-    
+
     Keyword Arguments:
         pretrained {bool} -- Whether or not to load saved pretrained weights (default: {True})
     """
@@ -75,7 +76,8 @@ class RNet(nn.Module):
         self.training = False
 
         # Load pre trained weights on model init
-        state_dict_path = os.path.join(os.path.dirname(__file__),'./pre_trained_weights/rnet.pt')
+        state_dict_path = os.path.join(os.path.dirname(
+            __file__), './pre_trained_weights/rnet.pt')
         if os.path.isfile(state_dict_path):
             state_dict = torch.load(state_dict_path)
             self.load_state_dict(state_dict)
@@ -100,7 +102,7 @@ class RNet(nn.Module):
 
 class ONet(nn.Module):
     """MTCNN ONet.
-    
+
     Keyword Arguments:
         pretrained {bool} -- Whether or not to load saved pretrained weights (default: {True})
     """
@@ -129,7 +131,8 @@ class ONet(nn.Module):
         self.training = False
 
         # Load pre trained weights on model init
-        state_dict_path = os.path.join(os.path.dirname(__file__),'./pre_trained_weights/onet.pt')
+        state_dict_path = os.path.join(os.path.dirname(
+            __file__), './pre_trained_weights/onet.pt')
         if os.path.isfile(state_dict_path):
             state_dict = torch.load(state_dict_path)
             self.load_state_dict(state_dict)
@@ -164,7 +167,7 @@ class MTCNN(nn.Module):
         - numpy.ndarray (uint8) representing either a single image (3D) or a batch of images (4D).
     Cropped faces can optionally be saved to file
     also.
-    
+
     Keyword Arguments:
         image_size {int} -- Output image size in pixels. The image will be square. (default: {160})
         margin {int} -- Margin to add to bounding box, in terms of pixels in the final image. 
@@ -216,10 +219,10 @@ class MTCNN(nn.Module):
         """Run MTCNN face detection on a PIL image or numpy array. This method performs both
         detection and extraction of faces, returning tensors representing detected faces rather
         than the bounding boxes. To access bounding boxes, see the MTCNN.detect() method below.
-        
+
         Arguments:
             img {PIL.Image, np.ndarray, or list} -- A PIL image, np.ndarray, or list.
-        
+
         Keyword Arguments:
             save_path {str} -- An optional save path for the cropped image. Note that when
                 self.post_process=True, although the returned tensor is post processed, the saved
@@ -228,7 +231,7 @@ class MTCNN(nn.Module):
                 (default: {None})
             return_prob {bool} -- Whether or not to return the detection probability.
                 (default: {False})
-        
+
         Returns:
             Union[torch.Tensor, tuple(torch.tensor, float)] -- If detected, cropped image of a face
                 with dimensions 3 x image_size x image_size. Optionally, the probability that a
@@ -260,7 +263,7 @@ class MTCNN(nn.Module):
                 save_path = [save_path]
         else:
             save_path = [None for _ in range(len(img))]
-        
+
         # Process all bounding boxes and probabilities
         faces, probs = [], []
         for im, box_im, prob_im, path_im in zip(img, batch_boxes, batch_probs, save_path):
@@ -279,7 +282,8 @@ class MTCNN(nn.Module):
                     save_name, ext = os.path.splitext(path_im)
                     face_path = save_name + '_' + str(i + 1) + ext
 
-                face = extract_face(im, box, self.image_size, self.margin, face_path)
+                face = extract_face(im, box, self.image_size,
+                                    self.margin, face_path)
                 if self.post_process:
                     face = fixed_image_standardization(face)
                 faces_im.append(face)
@@ -289,10 +293,10 @@ class MTCNN(nn.Module):
             else:
                 faces_im = faces_im[0]
                 prob_im = prob_im[0]
-            
+
             faces.append(faces_im)
             probs.append(prob_im)
-    
+
         if not batch_mode:
             faces = faces[0]
             probs = probs[0]
@@ -308,13 +312,13 @@ class MTCNN(nn.Module):
         that require lower-level handling of bounding boxes and facial landmarks (e.g., face
         tracking). The functionality of the forward function can be emulated by using this method
         followed by the extract_face() function.
-        
+
         Arguments:
             img {PIL.Image, np.ndarray, or list} -- A PIL image or a list of PIL images.
         Keyword Arguments:
             landmarks {bool} -- Whether to return facial landmarks in addition to bounding boxes.
                 (default: {False})
-        
+
         Returns:
             tuple(numpy.ndarray, list) -- For N detected faces, a tuple containing an
                 Nx4 array of bounding boxes and a length N list of detection probabilities.
@@ -356,7 +360,8 @@ class MTCNN(nn.Module):
                 probs.append([None])
                 points.append(None)
             elif self.select_largest:
-                box_order = np.argsort((box[:, 2] - box[:, 0]) * (box[:, 3] - box[:, 1]))[::-1]
+                box_order = np.argsort(
+                    (box[:, 2] - box[:, 0]) * (box[:, 3] - box[:, 1]))[::-1]
                 box = box[box_order]
                 point = point[box_order]
                 boxes.append(box[:, :4])
@@ -378,12 +383,13 @@ class MTCNN(nn.Module):
         if landmarks:
             return boxes, probs, points
 
-        return boxes, probs
+        return boxes, probs, None
 
 
 def fixed_image_standardization(image_tensor):
     processed_tensor = (image_tensor - 127.5) / 128.0
     return processed_tensor
+
 
 def prewhiten(x):
     mean = x.mean()

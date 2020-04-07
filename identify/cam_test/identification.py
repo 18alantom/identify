@@ -7,7 +7,6 @@ Flags:
 """
 
 import os
-import sys
 import cv2
 
 import torch
@@ -15,34 +14,15 @@ import numpy as np
 
 from time import time
 from scipy import stats
-from pathlib import Path
 
-from models.mtcnn import MTCNN
-from helpers import get_model, get_mean_std
-
-MODEL_PATH = Path("models")
-WEIGHTS_PATH = MODEL_PATH / "tuned"
-WEIGHTS_FILE = "inception_resnet_v1_tuned.pt"
-THRESH_FILE = "threshold.pt"
-
-DATA = Path("data")
-CLASSIFIED_CROPS = "classified_crops"
-EMBED_FILE = "embeddings.pt"
-
-DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-BORDER_COLOR = (255, 105, 180)
-LINE_THICKNESS = 2
-
-# Flags
-TH = "-t"
-WE = "-w"
-SC = "-s"
-PR = "-p"
+from identify.models import MTCNN
+from identify.helpers import get_model
+from identify.helpers.constants import TC, BC, TLW, BLW
 
 
-def get_embeddings():
-    if (DATA/EMBED_FILE).exists():
-        return torch.load(DATA/EMBED_FILE)
+def get_embeddings(embeddings_path):
+    if (embeddings_path).exists():
+        return torch.load(embeddings_path)
     return None
 
 
@@ -65,7 +45,7 @@ def predict(embeds, saved_embeds, saved_classes, saved_labels, k, threshold, pri
     return classes
 
 
-def detect_identify(mean, std, scale, thresholds, saved_embeds, saved_labels, saved_classes, k, id_threshold, print_dist, weights_path_file=None):
+def detect_identify(model_identifier, model_detector, mean, std, box_params, scale, saved_embeds, saved_labels, saved_classes, k, id_threshold, print_dist):
     mean = mean.reshape(1, 3, 1, 1)
     std = std.reshape(1, 3, 1, 1)
 
@@ -93,14 +73,6 @@ def detect_identify(mean, std, scale, thresholds, saved_embeds, saved_labels, sa
 
     # Transform to normalize the tensor using given mean and std.
     def tr_4(t): return (t - mean)/std
-
-    model_identifier = None
-    if weights_path_file is not None:
-        model_identifier = get_model(weights_path_file, DEVICE)
-    else:
-        model_identifier = get_model(WEIGHTS_PATH/WEIGHTS_FILE, DEVICE)
-    model_detector = MTCNN(thresholds=thresholds,
-                           device=DEVICE, keep_all=True)
 
     model_identifier.eval()
     model_detector.eval()
@@ -144,9 +116,9 @@ def detect_identify(mean, std, scale, thresholds, saved_embeds, saved_labels, sa
                 st = f"{cls} {dist:0.3f}"
 
                 cv2.putText(img_boxed, st, (int(p1[0]+10), int(p1[1]+20)), cv2.FONT_HERSHEY_COMPLEX,
-                            0.6, (255, 125, 200), 2)
-                cv2.rectangle(img_boxed, p1, p2, color=BORDER_COLOR,
-                              thickness=LINE_THICKNESS)
+                            box_params[TLW], box_params[TC], 2)
+                cv2.rectangle(img_boxed, p1, p2, color=box_params[BC],
+                              thickness=box_params[BLW])
 
         img_boxed = tr_2(img_boxed)
 
@@ -184,51 +156,26 @@ def print_stats(times, frames_shown):
             print(f"{'fps'.ljust(20)} {frames_shown/tot}")
 
 
-def get_flags():
-    flags = {TH: None, WE: None, SC: None, PR: False}
-    for key in flags:
-        if key in sys.argv:
-            if key == PR:
-                flags[key] = True
-                continue
-
-            idx = sys.argv.index(key) + 1
-            flags[key] = sys
-            try:
-                value = sys.argv[idx]
-                if key == TH or key == SC:
-                    flags[key] = torch.tensor(float(value))
-                else:
-                    flags[key] = Path(value)
-            except IndexError:
-                return None
-    return flags
-
-
-def main():
-    flags = get_flags()
-    flag_th = flags[TH]
-    weights_path_file = flags[WE]
-    print_dist = flags[PR]
-
-    id_threshold = torch.load(
-        WEIGHTS_PATH/THRESH_FILE) if flag_th is None else flag_th
+def identification(embeddings_path, weights_path, device, mean, std, id_threshold, box_params, scale=1, print_dist=False):
     thresholds = [0.8, 0.9, 0.9]
-    scale = 0.75 if flags[SC] is None else float(flags[SC])
     k = 7
 
-    mean, std = get_mean_std(DATA/CLASSIFIED_CROPS)
-    em = get_embeddings()
+    em = get_embeddings(embeddings_path)
 
     saved_embeds = em["embeds"]
     saved_labels = em["labels"]
     saved_classes = em["classes"]
 
+    model_identifier = None
+    if weights_path is not None:
+        model_identifier = get_model(weights_path, device)
+    else:
+        model_identifier = get_model(None, device)
+    model_detector = MTCNN(thresholds=thresholds,
+                           device=device, keep_all=True)
+
     print(f"distance threshold set at: {id_threshold}")
-    times, frames_shown = detect_identify(mean, std, scale, thresholds, saved_embeds,
-                                          saved_labels, saved_classes, k, id_threshold, print_dist, weights_path_file)
+    times, frames_shown = detect_identify(model_identifier, model_detector, mean, std, box_params, scale, saved_embeds,
+                                          saved_labels, saved_classes, k, id_threshold, print_dist)
 
     print_stats(times, frames_shown)
-
-
-main()

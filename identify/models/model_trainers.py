@@ -88,7 +88,7 @@ class DistLoss:
         return loss
 
 
-def dist_fit(model, optim, train_dl, valid_dl, device, data_count, loss_func=DistLoss(), epochs=25 ):
+def dist_fit(model, optim, train_dl, valid_dl, device, data_count, loss_func=DistLoss(), epochs=25):
     start = time()
     def time_st(x): return f"{x//60:0.0f} m {x%60:0.3f} s"
     model = model.to(device)
@@ -157,10 +157,6 @@ def dist_fit(model, optim, train_dl, valid_dl, device, data_count, loss_func=Dis
     tot_time = time() - start
     print(f"\nTime taken: {time_st(tot_time)}")
     return model.load_state_dict(best_model_state_dict), losses_tr, losses_va
-
-
-def fit(model, optim, train_dl, valid_dl, device, data_count, loss_func=DistLoss(), epochs=25, ):
-    pass
 
 
 def std_fit(model, optim, train_dl, valid_dl, device, data_count, loss_func, epochs=25):

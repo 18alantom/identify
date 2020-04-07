@@ -21,7 +21,7 @@ Store in folder structure:
            └── PERSON_TWO
                   └── 000.jpg
 
-// TODO: Make a better interface for this.
+// TODO: Make a GUI interface for this.
 """
 
 import os
@@ -32,15 +32,8 @@ import numpy as np
 
 from time import time
 from PIL import Image
-from models.mtcnn import MTCNN
-from helpers import get_face_crops, save_face_crops
-
-# # File ext and names
-# IMG_EXTENSION = ".jpg"
-# IMG_FORMAT = "jpeg"
-
-# Flags
-OUTPUT_FOLDER = "-o"
+from identify.models import MTCNN
+from identify.helpers import get_face_crops, save_face_crops
 
 
 def get_image_buffer(vc):
@@ -105,29 +98,13 @@ def captures_to_crops(model, captures):
     return names, torch.stack(crops)
 
 
-def get_locations():
-    # Get folders if flags are set
-    output_folder = None
-    if OUTPUT_FOLDER in sys.argv:
-        try:
-            output_folder = sys.argv[sys.argv.index(OUTPUT_FOLDER) + 1]
-            if not os.path.isdir(output_folder):
-                os.mkdir(output_folder)
-        except IndexError:
-            output_folder = None
-    return output_folder
-
-
-def run_detection():
+def from_cam(output_folder, device):
     """
     ignore_scanned: 
         will ignore previously scanned images, stored as a numpy list.
         -s flag when calling script will set ignore scanned to True
     """
-    output_folder = get_locations()
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    thresholds = [0.6, 0.7, 0.7]
-    model = MTCNN(thresholds=thresholds, device=device)
+    model = MTCNN(device=device)
 
     captures = start_capture()
     names, crops = captures_to_crops(model, captures)
@@ -136,6 +113,3 @@ def run_detection():
 
     save_face_crops(crops, names, output_folder)
     print("face crops saved")
-
-
-run_detection()
