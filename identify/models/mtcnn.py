@@ -247,7 +247,7 @@ class MTCNN(nn.Module):
 
         # Detect faces
         with torch.no_grad():
-            batch_boxes, batch_probs = self.detect(img)
+            batch_boxes, batch_probs, _ = self.detect(img)
 
         # Determine if a batch or single image was passed
         batch_mode = True

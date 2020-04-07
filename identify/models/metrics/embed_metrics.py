@@ -68,8 +68,9 @@ def show_embed_metrics(embeds, labels):
     """
     print(f'Showing embedding distance metrics, {len(labels)} embeds: ')
     dist_matr = get_cross_dist(embeds, embeds)
-    _, _, mean_min = show_min_max(dist_matr, labels, labels, show_sim=True)
+    _, overall, mean_min = show_min_max(
+        dist_matr, labels, labels, show_sim=True)
     print('---')
     _, _, _ = show_min_max(dist_matr, labels, labels, show_sim=False)
     print('---')
-    return mean_min
+    return overall

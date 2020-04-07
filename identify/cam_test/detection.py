@@ -81,7 +81,7 @@ def detection(box_params, device, scale=1, method="cnn", landmarks=True):
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         times.append(t2 - t1)
 
-        cv2.imshow('my webcam', img)
+        cv2.imshow('cam', img)
         if cv2.waitKey(1) == 27:
             break  # esc to quit
     y2 = time.time()

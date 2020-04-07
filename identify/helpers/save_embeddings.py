@@ -5,6 +5,7 @@ Flags:
   -o: Output Folder  (folder where embeds have to be stored)
 """
 import torch
+from pathlib import Path
 from torchvision import datasets, transforms
 from collections import OrderedDict
 
@@ -19,9 +20,14 @@ def get_dataloader(input_path):
 
 
 def save_embeddings(input_path, output_path, weights_path, device):
-    model = get_model(weights_path, device)
+    model, _ = get_model(weights_path, device)
     dataloader = get_dataloader(input_path)
     embeds, labels = get_embeddings(dataloader, model)
+
+    path = Path('/'.join(output_path.parts[:-1]))
+    if not path.exists():
+        path.mkdir(parents=True)
+
     save_this = OrderedDict(
         {"embeds": embeds, "labels": labels, "classes": dataloader.dataset.classes})
     torch.save(save_this, output_path)

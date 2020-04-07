@@ -15,6 +15,7 @@ LND = "-l"  # Landmarks to show
 EMB = "-e"  # Embeddings path
 ISC = "-s"  # Ignore scanned
 KNN = "-k"  # k value for kNN
+DIL = "-d"  # Use distance loss
 
 # Folder names and paths
 BLW = "box_line_width"
@@ -33,7 +34,7 @@ DATA = Path("data").absolute()
 T_EXT = ".pt"
 
 # Path to embeddings
-EMBEDS = DATA/("embeds"+T_EXT)
+EMBEDS = DATA/"embeds"/("embeds"+T_EXT)
 
 # Path to crops
 CROPS = DATA/"crops"
@@ -61,7 +62,7 @@ CAM = "cam"
 TST = "test"
 IDN = "id"
 DET = "detect"
-ACC = "accuracy"
+ACC = "acc"
 
 ext_comm = [GET, TST]
 get_comm = [IMG, CAM]
@@ -83,7 +84,8 @@ flag_dict = {
         INP: Path,
         OUP: Path,
         RET: Path,
-        EPO: int
+        EPO: int,
+        DIL: None,
     },
     GET: {
         IMG: {
@@ -113,7 +115,8 @@ flag_dict = {
             EMB: Path,
             WEI: Path,
             KNN: int,
-            THR: float
+            THR: float,
+            PRN: None
         }
     }
 }
@@ -134,6 +137,7 @@ default_dict = {
         OUP: WEIGHTS,
         RET: None,
         EPO: 20,
+        DIL: False
     },
     GET: {
         IMG: {
@@ -163,7 +167,8 @@ default_dict = {
             EMB: EMBEDS,
             WEI: WEIGHTS,
             KNN: 7,
-            THR: 0.7
+            THR: 0.7,
+            PRN: False
         }
     }
 

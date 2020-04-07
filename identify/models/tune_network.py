@@ -37,7 +37,7 @@ def get_weight(dataset):
     return torch.tensor(weight)
 
 
-def tune_network(model, train_dl, valid_dl, test_dl, data_count, device, epochs, dist_loss):
+def run_tune(model, train_dl, valid_dl, test_dl, data_count, device, epochs, dist_loss):
     # Freeze all layers
     for param in model.parameters():
         param.requires_grad = False
@@ -77,16 +77,18 @@ def test_model(model, test_dl, embeds, labels,  k, thresh):
 
 def get_threshold(model, embeds, labels):
     clearance = 0.1
-    mean_min = show_embed_metrics(embeds, labels)
-    thresh = np.round(mean_min.item()+clearance, 3)
+    thresh = show_embed_metrics(embeds, labels)
+    thresh = np.round(thresh.item()+clearance, 3)
 
     print(f"threshold: {thresh:0.4f}")
     return torch.tensor(thresh)
 
 
 def save_values(model, thresh, output_folder):
-    if not output_folder.exists():
-        output_folder.mkdir(parents=True)
+
+    path = Path('/'.join(output_folder.parts[:-1]))
+    if not path.exists():
+        path.mkdir(parents=True)
 
     data = {"state_dict": model.state_dict(), "threshold": thresh}
     torch.save(data, output_folder)
@@ -103,11 +105,13 @@ def tune_network(input_folder, output_folder, device, epochs=25, retune=None, di
     test_path = input_folder/"test"
 
     model = InceptionResnetV1(device=device)
-    try:
-        state_dict = torch.load(retune)['state_dict']
-        model.load_state_dict(state_dict)
-    except FileNotFoundError:
-        pass
+    if retune is not None:
+        try:
+            state_dict = torch.load(retune)['state_dict']
+            print("model weights loaded")
+            model.load_state_dict(state_dict)
+        except FileNotFoundError:
+            pass
 
     # Load all the dataloaders
     dloaders, data_count = get_dataloader(train_path)
@@ -118,8 +122,9 @@ def tune_network(input_folder, output_folder, device, epochs=25, retune=None, di
     embed_dl = get_dataloader(train_path, use_transforms=False,
                               get_split=False, drop_last=False, batch_size=16)
 
-    # Function that calls fit using Adam optimiser and the passed parameters.
-    tune_network(model, train_dl, valid_dl, test_dl,
+    if epochs > 0:
+        # Function that calls fit using Adam optimiser and the passed parameters.
+        run_tune(model, train_dl, valid_dl, test_dl,
                  data_count, device, epochs, dist_loss)
 
     # Embeddings used to calculate threshold and check accuracy.
@@ -132,4 +137,4 @@ def tune_network(input_folder, output_folder, device, epochs=25, retune=None, di
     test_model(model, test_dl, embeds, labels, k, thresh)
 
     # Save the state_dict and threshold as .pt files.
-    save_values(model, thresh, output_folder, name)
+    save_values(model, thresh, output_folder)

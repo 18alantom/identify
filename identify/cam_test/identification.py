@@ -86,16 +86,14 @@ def detect_identify(model_identifier, model_detector, mean, std, box_params, sca
         t1 = time()
 
         is_read, img = vc.read()
-        img_bgr = cv2.resize(img, (0, 0), fx=scale, fy=scale)
-
-        img = tr_1(img_bgr)
+        img = tr_1(img)
 
         with torch.no_grad():
             t2 = time()
             crop_tensors = model_detector(img)
 
             t3 = time()
-            boxes, probs = model_detector.detect(img)
+            boxes, probs, _ = model_detector.detect(img)
 
             t4 = time()
             if crop_tensors is not None:

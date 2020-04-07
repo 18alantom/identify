@@ -66,6 +66,7 @@ def get_model(weights_path, device):
     try:
         data = torch.load(weights_path)
         model.load_state_dict(data['state_dict'])
+        print("model weights loaded")
     except:
         print("using stock weights")
         return InceptionResnetV1(device=device), 2

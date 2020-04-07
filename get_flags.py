@@ -11,12 +11,12 @@ def get_sub_dict(arg):
     command = arg[1]
 
     if command not in flag_dict.keys():
-        error("invalid command")
+        error(f"invalid command {command}")
 
     if command in ext_comm:
         sub_comm = arg[2]
         if sub_comm not in flag_dict[command].keys():
-            error("specify sub command")
+            error(f"incomplete command {command}")
         else:
             return command, sub_comm, flag_dict[command][sub_comm]
 

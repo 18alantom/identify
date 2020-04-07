@@ -25,7 +25,7 @@ def get_mean_std(path):
     return mean, std
 
 
-def get_dataloader(data_path, use_transforms=True, get_split=True, drop_last=True, batch_size=5):
+def get_dataloader(data_path, use_transforms=True, get_split=True, drop_last=True, batch_size=5, shuffle=False):
     # Returns DataLoader and datacount if using sampler (for split).
     mean, std = get_mean_std(data_path)
     data_trans = None
@@ -46,7 +46,7 @@ def get_dataloader(data_path, use_transforms=True, get_split=True, drop_last=Tru
 
     if not get_split:
 
-        return DataLoader(dataset, batch_size=batch_size, drop_last=drop_last)
+        return DataLoader(dataset, batch_size=batch_size, drop_last=drop_last, shuffle=shuffle)
     else:
         targets = np.array(dataset.targets)
         idx = train_test_split(torch.arange(
