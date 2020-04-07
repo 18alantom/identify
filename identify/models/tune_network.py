@@ -84,16 +84,16 @@ def get_threshold(model, embeds, labels):
     return torch.tensor(thresh)
 
 
-def save_values(model, thresh, output_folder, name):
+def save_values(model, thresh, output_folder):
     if not output_folder.exists():
         output_folder.mkdir(parents=True)
 
-    for name, data in [(name+TEN_FORMAT, model.state_dict()), (name + "_th"+TEN_FORMAT, thresh)]:
-        torch.save(data, output_folder/name)
+    data = {"state_dict": model.state_dict(), "threshold": thresh}
+    torch.save(data, output_folder)
     print("model and threshold saved")
 
 
-def tune_network(input_folder, output_folder, name, device, epochs=25, retune=None, dist_loss=False):
+def tune_network(input_folder, output_folder, device, epochs=25, retune=None, dist_loss=False):
     TR, VA = SETS
     # Set k for accuracy testing.
     k = 7
@@ -104,7 +104,7 @@ def tune_network(input_folder, output_folder, name, device, epochs=25, retune=No
 
     model = InceptionResnetV1(device=device)
     try:
-        state_dict = torch.load(retune)
+        state_dict = torch.load(retune)['state_dict']
         model.load_state_dict(state_dict)
     except FileNotFoundError:
         pass

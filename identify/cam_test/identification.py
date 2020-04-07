@@ -46,8 +46,6 @@ def predict(embeds, saved_embeds, saved_classes, saved_labels, k, threshold, pri
 
 
 def detect_identify(model_identifier, model_detector, mean, std, box_params, scale, saved_embeds, saved_labels, saved_classes, k, id_threshold, print_dist):
-    mean = mean.reshape(1, 3, 1, 1)
-    std = std.reshape(1, 3, 1, 1)
 
     times = {
         "complete": [],
@@ -72,7 +70,11 @@ def detect_identify(model_identifier, model_detector, mean, std, box_params, sca
     def tr_3(t): return ((t + 1)*128 - 0.5)/255
 
     # Transform to normalize the tensor using given mean and std.
-    def tr_4(t): return (t - mean)/std
+    def tr_4(t): return t
+    if mean is not None and std is not None:
+        mean = mean.reshape(1, 3, 1, 1)
+        std = std.reshape(1, 3, 1, 1)
+        def tr_4(t): return (t - mean)/std
 
     model_identifier.eval()
     model_detector.eval()
@@ -168,11 +170,14 @@ def identification(embeddings_path, weights_path, device, mean, std, id_threshol
 
     model_identifier = None
     if weights_path is not None:
-        model_identifier = get_model(weights_path, device)
+        model_identifier, thr = get_model(weights_path, device)
     else:
-        model_identifier = get_model(None, device)
+        model_identifier, thr = get_model(None, device)
     model_detector = MTCNN(thresholds=thresholds,
                            device=device, keep_all=True)
+
+    if id_threshold is None:
+        id_threshold = thr
 
     print(f"distance threshold set at: {id_threshold}")
     times, frames_shown = detect_identify(model_identifier, model_detector, mean, std, box_params, scale, saved_embeds,

@@ -64,11 +64,12 @@ def get_face_crops(model, images, is_single=False):
 def get_model(weights_path, device):
     model = InceptionResnetV1(device=device)
     try:
-        state_dict = torch.load(weights_path)
-        model.load_state_dict(state_dict)
+        data = torch.load(weights_path)
+        model.load_state_dict(data['state_dict'])
     except:
-        return InceptionResnetV1(device=device)
-    return model
+        print("using stock weights")
+        return InceptionResnetV1(device=device), 2
+    return model, data['threshold']
 
 
 def create_class_folder(name, output_folder):

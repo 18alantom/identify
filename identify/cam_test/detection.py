@@ -2,9 +2,8 @@
 Get some stats such as detection fps for detection running on a
 given video stream which may be running using CNN or HOG or may
 be bypassed.
-
-detection method depends on sys.argv[1] see set_param_run()
 """
+
 import sys
 import dlib
 import cv2

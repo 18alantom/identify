@@ -4,7 +4,6 @@ from pathlib import Path
 INP = "-i"  # Input path
 OUP = "-o"  # Output path
 WEI = "-w"  # Weights path
-NAM = "-n"  # Name of saved weights (and threshold)
 CNT = "-c"  # Count of augmented images to be gen
 EPO = "-e"  # Epochs
 RET = "-r"  # Path to weights that have to be retuned
@@ -15,20 +14,44 @@ MTH = "-m"  # Method of detection
 LND = "-l"  # Landmarks to show
 EMB = "-e"  # Embeddings path
 ISC = "-s"  # Ignore scanned
+KNN = "-k"  # k value for kNN
+
 # Folder names and paths
+BLW = "box_line_width"
+TLW = "text_line_width"
+BC = "box_color"
+TC = "text_color"
 
-DATA = Path("data")
+BOX_PARAMS = {
+    BLW: 2,
+    TLW: 1,
+    BC: (255, 105, 180),
+    TC: (255, 155, 230)
+}
+
+DATA = Path("data").absolute()
+T_EXT = ".pt"
+
+# Path to embeddings
+EMBEDS = DATA/("embeds"+T_EXT)
+
+# Path to crops
 CROPS = DATA/"crops"
-WEIGHTS = DATA/"weights"
+CROPS_TRAIN = CROPS/"train"
+CROPS_TEST = CROPS/"test"
+CROPS_AUG_TRAIN = DATA/"crops_aug"/"train"
 
-# Paths
-FACE_IMAGES_PATH = DATA/"faces"
-TRAIN_CROPS_PATH = CROPS/"train"
-TEST_CROPS_PATH = CROPS/"test"
+# Path to images with faces
+FACE_IMAGES_PATH = DATA/"faces"/"train"
+
+# Default names
+NAME = "model"
+WEIGHTS = DATA/"weights"/(NAME+T_EXT)
 
 # Commands
 AUG = "augment"
 TUN = "tune"
+EMD = "embed"
 # detect is to be combined with image or cam
 GET = "detect"
 IMG = "image"
@@ -40,28 +63,33 @@ IDN = "id"
 DET = "detect"
 ACC = "accuracy"
 
-commands = [AUG, TUN, GET, TST]
+ext_comm = [GET, TST]
 get_comm = [IMG, CAM]
 tst_comm = [IDN, DET, ACC]
 
-flag_list = {
+
+flag_dict = {
     AUG: {
         INP: Path,
         OUP: Path,
         CNT: int
     },
+    EMD: {
+        INP: Path,
+        WEI: Path,
+        OUP: Path
+    },
     TUN: {
         INP: Path,
         OUP: Path,
         RET: Path,
-        NAM: str,
         EPO: int
     },
     GET: {
         IMG: {
             INP: Path,
             OUP: Path,
-            ISC: False
+            ISC: None
         },
         CAM: {
             OUP: Path
@@ -81,9 +109,62 @@ flag_list = {
             SCA: float
         },
         ACC: {
-            EMB: Path,
             INP: Path,
-            WEI: Path
+            EMB: Path,
+            WEI: Path,
+            KNN: int,
+            THR: float
         }
     }
+}
+
+default_dict = {
+    AUG: {
+        INP: CROPS_TRAIN,
+        OUP: CROPS_AUG_TRAIN,
+        CNT: 1000
+    },
+    EMD: {
+        INP: CROPS_TRAIN,
+        WEI: WEIGHTS,
+        OUP: EMBEDS
+    },
+    TUN: {
+        INP: CROPS,
+        OUP: WEIGHTS,
+        RET: None,
+        EPO: 20,
+    },
+    GET: {
+        IMG: {
+            INP: FACE_IMAGES_PATH,
+            OUP: CROPS_TRAIN,
+            ISC: False
+        },
+        CAM: {
+            OUP: CROPS_TRAIN
+        }
+    },
+    TST: {
+        IDN: {
+            INP: EMBEDS,
+            WEI: WEIGHTS,
+            PRN: False,
+            SCA: 1,
+            THR: None
+        },
+        DET: {
+            MTH: "cnn",
+            LND: True,
+            SCA: 1
+        },
+        ACC: {
+            INP: CROPS_TEST,
+            EMB: EMBEDS,
+            WEI: WEIGHTS,
+            KNN: 7,
+            THR: 0.7
+        }
+    }
+
 }
