@@ -1,4 +1,4 @@
-# smel_project
+# identify
 
 Contains an attempt at identification using CNNs for the purpose of college project (Software Engineering/ Machine Learning).
 
