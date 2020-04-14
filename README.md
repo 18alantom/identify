@@ -1,6 +1,6 @@
 # identify
 
-Contains an attempt at identification using CNNs for the purpose of college project (Software Engineering/ Machine Learning).
+Contains an attempt at identification using CNNs for the purpose of a college project (Software Engineering/ Machine Learning).
 
 The project makes use of [transfer learning](https://cs231n.github.io/transfer-learning/), all the layers but the last linear layer are frozen, a new linear layer (512 to number of classes) along with a log softmax layer are added for training. Prediction of identity is done using kNN.
 
